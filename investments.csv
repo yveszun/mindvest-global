@@ -1,0 +1,11 @@
+investment_id,funder_id,recipient,year,theme,country,amount,currency,instrument,finance_status,mh_relevance,source_id,is_demo
+I01,F01,Example maternal clinic network,2021,Maternal health,Philippines,1200000,USD,Grant,Committed,Adjacent,DEMO,true
+I02,F01,Example reproductive health coalition,2023,Family planning,Kenya,950000,USD,Grant,Committed,Adjacent,DEMO,true
+I03,F01,Example community health programme,2025,Community health workers,Nepal,1600000,USD,Grant,Committed,Adjacent,DEMO,true
+I04,F02,Example primary care programme,2021,Primary healthcare,Indonesia,4500000,USD,Loan,Committed,Adjacent,DEMO,true
+I05,F02,Example digital health programme,2024,Digital health,Philippines,2800000,USD,Loan,Committed,Adjacent,DEMO,true
+I06,F02,Example health workforce programme,2025,Health workforce,Viet Nam,3500000,USD,Loan,Committed,Adjacent,DEMO,true
+I07,F03,Example education programme,2022,Education,India,700000,USD,Grant,Committed,Adjacent,DEMO,true
+I08,F03,Example youth livelihoods programme,2024,Youth employment,Kenya,1100000,USD,Grant,Committed,Adjacent,DEMO,true
+I09,F04,Example HIV prevention programme,2022,HIV prevention,South Africa,2400000,USD,Grant,Committed,Adjacent,DEMO,true
+I10,F04,Example community care programme,2025,Primary healthcare,Nigeria,3200000,USD,Grant,Committed,Adjacent,DEMO,true

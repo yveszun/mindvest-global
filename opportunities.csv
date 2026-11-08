@@ -1,0 +1,6 @@
+opportunity_id,name,theme,geography,intervention,eligible_funder_types,description,is_demo
+O01,Maternal mental health integration,Maternal mental health,Global,Integrate psychosocial care into maternal services,Foundation|Multilateral partnership,Integrated maternal health service delivery,true
+O02,Mental health in primary care,Primary care mental health,Global,Train and support primary care providers,Development bank|Multilateral partnership|Foundation,Integrate evidence-based mental healthcare into primary care,true
+O03,School mental health,Adolescent mental health,Global,School-based psychosocial support,Foundation|Multilateral partnership,Youth wellbeing in education settings,true
+O04,Digital psychosocial support,Digital mental health,Global,Digital tools for stepped mental health care,Development bank|Foundation,Digitally supported psychosocial care,true
+O05,Community mental health workforce,Community mental health,Global,Community worker training and supervision,Development bank|Foundation|Multilateral partnership,Expand community mental health workforce,true

@@ -1,0 +1,4 @@
+country,year,intervention,estimated_need_usd,available_financing_usd,coverage_note,source_id,is_demo
+Philippines,2026,Primary care mental health,12000000,4500000,Illustrative scenario only,DEMO,true
+Kenya,2026,Maternal mental health,8500000,2800000,Illustrative scenario only,DEMO,true
+Nepal,2026,Community mental health,5000000,1700000,Illustrative scenario only,DEMO,true

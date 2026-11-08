@@ -1,0 +1,1 @@
+GitHub starter package: large Wellcome CSV files are reduced to the first 600 rows each to make upload manageable. They are NOT representative samples and must not be used for population-wide inference. The original full dataset remains in mindvest_global_validation_ready.zip. All other code and validation sample files are retained.
