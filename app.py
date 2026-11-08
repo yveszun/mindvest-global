@@ -6,12 +6,43 @@ from scoring import rank_opportunities, funding_gap
 ROOT = Path(__file__).parent / 'data'
 def load(name):
     return pd.read_csv(ROOT / f'{name}.csv')
+
+# Detect available dataset for status banner
+def get_dataset_status():
+    """Determine which Wellcome dataset is available."""
+    full_data = ROOT / 'wellcome_full_analytical.csv'
+    legacy_data = ROOT / 'wellcome_awards_imported.csv'
+    
+    if full_data.exists():
+        df = pd.read_csv(full_data)
+        # Verify it's the full dataset by checking row count and amount
+        if len(df) >= 20000 and df['amount_gbp'].sum() > 1e10:
+            return 'full', len(df), df['amount_gbp'].sum()
+    
+    if legacy_data.exists():
+        df = pd.read_csv(legacy_data)
+        return 'legacy', len(df), df['amount_gbp'].sum()
+    
+    return 'none', 0, 0
+
+dataset_status, record_count, total_amount = get_dataset_status()
+
 funders, investments, opportunities = load('funders'), load('investments'), load('opportunities')
 needs, links, evidence = load('needs'), load('theme_links'), load('evidence')
 st.set_page_config(page_title='MindVest Global', page_icon='🧠', layout='wide')
 st.title('MindVest Global')
-st.caption('Mental health investment intelligence | Complete official Wellcome grants (2000-2026) + clearly labeled synthetic modules')
-st.info('📊 COMPLETE DATASET: Award-Level Explorer now includes all 23,942 analytically eligible Wellcome grants (£19.8 billion, 2000-2026). Mental health keyword candidates are unreviewed and require manual classification.')
+
+# Conditional banner based on actual loaded dataset
+if dataset_status == 'full':
+    st.caption(f'Mental health investment intelligence | Complete official Wellcome grants ({record_count:,} records, 2000-2026) + clearly labeled synthetic modules')
+    st.info(f'📊 COMPLETE DATASET: Award-Level Explorer includes {record_count:,} analytically eligible Wellcome grants (£{total_amount/1e9:.1f} billion, 2000-2026). Mental health keyword candidates are unreviewed and require manual classification.')
+elif dataset_status == 'legacy':
+    st.caption('Mental health investment intelligence | Demonstration extract + clearly labeled synthetic modules')
+    st.error(f'⚠️ LEGACY EXTRACT: Award-Level Explorer contains only {record_count:,} records (demonstration extract, not representative). Run PYTHONPATH=./lib python import_full_wellcome.py to upgrade to the complete 23,942-record dataset.')
+else:
+    st.caption('Mental health investment intelligence | Clearly labeled synthetic modules')
+    st.warning('⚠️ NO WELLCOME DATA: Award-Level Explorer requires dataset. Upload official Wellcome grants spreadsheet or run import pipeline.')
+
 st.warning('SYNTHETIC: Funder Discovery, Behavioral Intelligence, Capital Gaps and Prospect Dossier use fictional data. No BehaviorGPT calls are made.')
 page = st.sidebar.radio('Explore', ['Verified Evidence', 'Award-Level Explorer', 'Mental Health Triage', 'Classification Validation', 'Overview', 'Funder Discovery', 'Behavioral Intelligence', 'Capital Gaps', 'Prospect Dossier', 'BehaviorGPT Readiness'])
 

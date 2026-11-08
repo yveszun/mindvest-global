@@ -2,7 +2,7 @@
 WELLCOME FULL IMPORT AUDIT REPORT
 ================================================================================
 
-Generated: 2026-11-08 19:01:38
+Generated: 2026-11-08 19:11:51
 Source: data/Wellcome-grants-awarded-1-October-2000-to-9-September-2026.xlsx
 
 ### SOURCE DATA ###
@@ -87,10 +87,17 @@ Manual classification required.
    Purpose: Keyword matches requiring manual review
    Status: UNREVIEWED - do not use as verified MH funding
 
-5. EXCLUSIONS LOG
-   File: data/wellcome_full_exclusions.csv
+5. IMPORT LEDGER (complete status for all source rows)
+   File: data/wellcome_full_import_ledger.csv
+   Records: 26,288
+   Included: 23,942
+   Excluded: 2,346
+   Purpose: Complete row-by-row status tracking
+
+6. EXCLUSIONS ONLY (filtered view)
+   File: data/wellcome_full_exclusions_only.csv
    Records: 2,346
-   Purpose: Audit trail of excluded records
+   Purpose: Records excluded from analytical layer
 
 ### REPRODUCIBILITY ###
 Command to reproduce:

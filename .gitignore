@@ -17,7 +17,8 @@ data/wellcome_full_imported_all.csv
 # Keep analytical files (essential for app, smaller size)
 !data/wellcome_full_analytical.csv
 !data/wellcome_full_mh_candidates_unreviewed.csv  
-!data/wellcome_full_exclusions.csv
+!data/wellcome_full_import_ledger.csv
+!data/wellcome_full_exclusions_only.csv
 !data/FULL_WELLCOME_IMPORT_AUDIT.md
 
 # IDE

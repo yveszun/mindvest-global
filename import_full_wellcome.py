@@ -168,13 +168,24 @@ def generate_import_audit(workbook_path, output_dir='data'):
     audit_report.append(f"   Purpose: Keyword matches requiring manual review")
     audit_report.append(f"   Status: UNREVIEWED - do not use as verified MH funding")
     
-    # Exclusions log
-    exclusions_output = output_dir / 'wellcome_full_exclusions.csv'
-    exclusions.to_csv(exclusions_output, index=False)
-    audit_report.append(f"\n5. EXCLUSIONS LOG")
+    # Exclusions ledger (complete)
+    ledger_output = output_dir / 'wellcome_full_import_ledger.csv'
+    exclusions.to_csv(ledger_output, index=False)
+    audit_report.append(f"\n5. IMPORT LEDGER (complete status for all source rows)")
+    audit_report.append(f"   File: {ledger_output}")
+    audit_report.append(f"   Records: {len(exclusions):,}")
+    audit_report.append(f"   Included: {(~exclusions['excluded']).sum():,}")
+    audit_report.append(f"   Excluded: {exclusions['excluded'].sum():,}")
+    audit_report.append(f"   Purpose: Complete row-by-row status tracking")
+    
+    # Exclusions-only (filtered)
+    exclusions_only = exclusions[exclusions['excluded']].copy()
+    exclusions_output = output_dir / 'wellcome_full_exclusions_only.csv'
+    exclusions_only.to_csv(exclusions_output, index=False)
+    audit_report.append(f"\n6. EXCLUSIONS ONLY (filtered view)")
     audit_report.append(f"   File: {exclusions_output}")
-    audit_report.append(f"   Records: {len(exclusions[exclusions['excluded']]):,}")
-    audit_report.append(f"   Purpose: Audit trail of excluded records")
+    audit_report.append(f"   Records: {len(exclusions_only):,}")
+    audit_report.append(f"   Purpose: Records excluded from analytical layer")
     
     audit_report.append(f"\n### REPRODUCIBILITY ###")
     audit_report.append(f"Command to reproduce:")
@@ -209,6 +220,7 @@ def generate_import_audit(workbook_path, output_dir='data'):
     print(f"  - {all_imported_output}")
     print(f"  - {analytical_output}")
     print(f"  - {mh_candidates_output}")
+    print(f"  - {ledger_output}")
     print(f"  - {exclusions_output}")
     print(f"  - {audit_file}")
     print(f"\nAudit report: {audit_file}")

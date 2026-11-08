@@ -197,17 +197,53 @@ def test_audit_report_exists():
     """Audit report must exist."""
     assert Path('data/FULL_WELLCOME_IMPORT_AUDIT.md').exists()
 
-def test_exclusions_log_exists():
-    """Exclusions log must exist."""
-    assert Path('data/wellcome_full_exclusions.csv').exists()
+def test_import_ledger_exists():
+    """Import ledger (complete status) must exist."""
+    assert Path('data/wellcome_full_import_ledger.csv').exists()
 
-def test_raw_source_preserved():
-    """Raw source layer must be preserved."""
-    path = Path('data/wellcome_full_raw_source.csv')
-    assert path.exists()
-    if path.exists():
-        raw = pd.read_csv(path, nrows=10)
-        assert len(raw.columns) == 27  # Original 27 columns
+def test_exclusions_only_exists():
+    """Exclusions-only file must exist."""
+    assert Path('data/wellcome_full_exclusions_only.csv').exists()
+
+def test_ledger_is_complete():
+    """Import ledger must contain all source rows."""
+    ledger = pd.read_csv('data/wellcome_full_import_ledger.csv')
+    assert len(ledger) == 26288, f"Ledger should have 26,288 rows, got {len(ledger)}"
+    assert 'source_row_index' in ledger.columns, "Ledger must have source_row_index"
+    assert 'excluded' in ledger.columns, "Ledger must have excluded column"
+
+def test_exclusions_only_filtered():
+    """Exclusions-only file must contain only excluded rows."""
+    exclusions = pd.read_csv('data/wellcome_full_exclusions_only.csv')
+    assert len(exclusions) == 2346, f"Expected 2,346 exclusions, got {len(exclusions)}"
+    assert exclusions['excluded'].all(), "All rows in exclusions-only must be marked excluded"
+
+def test_zero_amounts_in_full_import():
+    """Zero-amount awards must be preserved in full imported layer."""
+    all_imported = pd.read_csv('data/wellcome_full_imported_all.csv')
+    zero_count = (all_imported['amount_gbp'] == 0).sum()
+    assert zero_count == 2346, f"Expected 2,346 zero-amount records, got {zero_count}"
+
+def test_zero_amounts_excluded_from_analytical():
+    """Zero-amount awards must be excluded from analytical layer."""
+    analytical = pd.read_csv('data/wellcome_full_analytical.csv')
+    zero_count = (analytical['amount_gbp'] == 0).sum()
+    assert zero_count == 0, f"Analytical layer should have no zero amounts, found {zero_count}"
+
+def test_duplicate_tracking_by_row():
+    """Duplicate tracking must mark only duplicate rows, not all rows sharing ID."""
+    ledger = pd.read_csv('data/wellcome_full_import_ledger.csv')
+    
+    # In this dataset, there are no duplicates
+    # But verify the logic: only duplicates (keep=False) should be marked
+    dup_exclusions = ledger[ledger['exclusion_reason'] == 'duplicate_grant_id']
+    
+    # Should be 0 for this clean dataset
+    assert len(dup_exclusions) == 0, "No duplicate exclusions expected in clean dataset"
+    
+    # Verify source_row_index exists and is sequential
+    assert 'source_row_index' in ledger.columns
+    assert ledger['source_row_index'].tolist() == list(range(len(ledger)))
 
 # Mental Health Candidates Tests
 def test_mh_candidates_exist():

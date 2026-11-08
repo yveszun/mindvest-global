@@ -58,8 +58,9 @@ def import_awards(path, max_rows=None, include_raw=False, audit_mode=False):
  for k in ('description','recipient'):
   if k not in out:out[k]=''
  
- # Track exclusion reasons
+ # Track exclusion reasons with source row index
  exclusions = pd.DataFrame({
+  'source_row_index': range(len(raw)),
   'grant_id': raw[cols['grant_id']].astype(str).str.strip(),
   'title': raw[cols['title']],
   'exclusion_reason': '',
@@ -111,12 +112,13 @@ def import_awards(path, max_rows=None, include_raw=False, audit_mode=False):
  out=out.dropna(subset=['award_date','amount_gbp'])
  out=out[(out.grant_id!='')&(out.grant_id!='nan')]
  
- # Track duplicates before removing
+ # Track duplicates before removing (mark only the duplicate rows, not the first occurrence)
  duplicates_mask = out['grant_id'].duplicated(keep='first')
  if duplicates_mask.any():
-  dup_ids = out.loc[duplicates_mask, 'grant_id']
-  exclusions.loc[exclusions['grant_id'].isin(dup_ids) & ~exclusions['excluded'], 'exclusion_reason'] = 'duplicate_grant_id'
-  exclusions.loc[exclusions['grant_id'].isin(dup_ids) & ~exclusions['excluded'], 'excluded'] = True
+  # Get the indices of duplicate rows in the original dataframe
+  dup_indices = duplicates_mask[duplicates_mask].index.tolist()
+  exclusions.loc[dup_indices, 'exclusion_reason'] = 'duplicate_grant_id'
+  exclusions.loc[dup_indices, 'excluded'] = True
  
  out=out.drop_duplicates(subset=['grant_id'],keep='first').sort_values(['award_date','grant_id'])
  out['funder']='Wellcome'
