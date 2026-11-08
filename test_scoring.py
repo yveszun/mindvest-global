@@ -1,9 +1,7 @@
 from pathlib import Path
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import pandas as pd
 from scoring import rank_opportunities, funding_gap
-D=Path(__file__).resolve().parents[1]/'data'
+D=Path(__file__).resolve().parent/'data'
 def read(n): return pd.read_csv(D/f'{n}.csv')
 def test_rank():
     r=rank_opportunities('F01',read('funders'),read('investments'),read('opportunities'),read('theme_links'))
