@@ -24,6 +24,8 @@ def audit_report(sample, population):
     """Return stratum-wise rates and weighted estimated prevalence, only for completed adjudications."""
     if sample.grant_id.duplicated().any():
         raise ValueError('Duplicate grant IDs in audit sample')
+    if population.grant_id.duplicated().any():
+        raise ValueError('Duplicate grant IDs in population data')
     if 'adjudicated_label' not in sample:
         raise ValueError('Missing adjudicated_label')
     valid=sample[sample.adjudicated_label.isin(LABELS)].copy()
