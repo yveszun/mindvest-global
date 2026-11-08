@@ -203,21 +203,41 @@ For each classification, record:
 
 ### Stratified Review Sample
 
+**IMPORTANT: The stratified sample is NOT representative of population category prevalence.**
+
+The sampling strategy deliberately **oversamples rare categories** (integrated, uncertain) and **undersamples common categories** (not_mh) to ensure adequate evaluation coverage across all categories.
+
+**Implications:**
+- Sample category distribution ≠ population category distribution
+- Unweighted sample metrics cannot be extrapolated to population estimates
+- To estimate population-level performance, apply inverse probability weights
+- Sampling metadata includes population sizes, sample sizes, and sampling probabilities for each stratum
+
 Generate stratified sample of 200-300 grants:
 
 **Strata:**
-1. **Direct MH (automated):** 40 grants
-2. **Integrated MH (automated):** 40 grants
-3. **Adjacent/Enabling (automated):** 40 grants
-4. **Not MH (automated):** 40 grants
-5. **Uncertain (automated):** 40 grants
-6. **Keyword-negative (baseline):** 40-80 grants randomly sampled from non-candidates
+1. **Direct MH (automated):** ~40 grants
+2. **Integrated MH (automated):** ~40 grants (oversampled - rare category)
+3. **Adjacent/Enabling (automated):** ~40 grants
+4. **Not MH (automated):** ~40 grants (undersampled - common category)
+5. **Uncertain (automated):** ~40 grants (oversampled - requires review)
+6. **Keyword-negative (baseline):** ~60 grants randomly sampled from non-candidates
 
 **Sampling method:**
+- Stratified sampling with fixed sample sizes per stratum
 - Random sampling within each stratum
-- Fixed seed for reproducibility
-- Overweight uncertain/borderline cases
-- Include diversity: amount range, date range, programme type
+- Confidence-based diversity sampling (mix of high/medium/low confidence)
+- Fixed seed (42) for reproducibility
+- Sampling metadata saved with population sizes and probabilities
+
+**Weighting for population estimates:**
+```
+weight[stratum] = (population_proportion[stratum]) / (sample_proportion[stratum])
+```
+
+Where:
+- population_proportion = stratum_size / total_population
+- sample_proportion = stratum_sample_size / total_sample_size
 
 ### Review CSV Format
 
@@ -254,9 +274,16 @@ Generate stratified sample of 200-300 grants:
 - Track agreement rates
 - Adjudicate disagreements through discussion
 
-## Evaluation Metrics
+### Evaluation Metrics
 
-### When Human Labels Available
+**Treatment of Uncertain Predictions:**
+- Uncertain predictions are **abstentions**, not negative classifications
+- **Abstention rate** = fraction of predictions classified as "uncertain"
+- **Classification coverage** = 1 - abstention rate
+- Performance metrics (precision, recall, F1) computed only on classified samples (excluding uncertain)
+- Abstention rate and coverage reported separately
+
+**When Human Labels Available:**
 
 **Overall Performance:**
 - Precision: True positives / (True positives + False positives)
@@ -264,10 +291,17 @@ Generate stratified sample of 200-300 grants:
 - F1 Score: 2 × (Precision × Recall) / (Precision + Recall)
 - Accuracy: Correct classifications / Total classifications
 
-**Binary Mental Health Relevance:**
+#### Binary Mental Health Relevance:**
+
+**Abstention/Coverage Metrics:**
+- Abstention rate: proportion of predictions = "uncertain"
+- Classification coverage: 1 - abstention rate  
+- Human labeled uncertain: count of human "uncertain" labels
+
+**Performance on Classified Samples:**
+(excluding uncertain predictions)
 - Combine Direct + Integrated as "relevant"
 - Adjacent + Not MH as "not relevant"
-- Uncertain excluded or separate analysis
 - Report precision, recall, F1 for relevance
 
 **Multi-class Performance:**
@@ -361,7 +395,17 @@ PYTHONPATH=./lib python generate_review_sample_v1.py \
     --seed 42
 ```
 
-## Changelog
+### Changelog
+
+### v1.0.1 (November 2026 - Methodological Corrections)
+- **Fixed:** Uncertain predictions now treated as abstentions, not negatives
+- **Fixed:** Evaluation correctly reports abstention rate and classification coverage separately
+- **Fixed:** Integrated MH pattern matching tightened (reduced false positives from generic "screening")
+- **Fixed:** Direct MH signals take precedence over integrated classification
+- **Added:** Streamlit validation upload with comprehensive validation (grant IDs, categories, duplicates)
+- **Added:** Sampling metadata file documenting population sizes, sampling probabilities, stratum weights
+- **Documented:** Stratified sample is NOT representative of population prevalence
+- **Documented:** Sample metrics require weighting for population estimates
 
 ### v1.0 (November 2026)
 - Initial rule-based classifier

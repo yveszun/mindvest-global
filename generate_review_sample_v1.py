@@ -26,6 +26,13 @@ def generate_review_sample(
     """
     Generate stratified review sample for human validation.
     
+    IMPORTANT: The stratified sample is NOT representative of population category prevalence.
+    It deliberately oversamples rare categories (integrated, uncertain) and undersamples 
+    common categories (not_mh) to ensure adequate evaluation across all categories.
+    
+    Sample metrics are UNWEIGHTED and cannot be extrapolated to population estimates without
+    applying appropriate sampling weights.
+    
     Args:
         classifications_path: Path to classified grants CSV
         output_path: Path to save review sample CSV
@@ -33,34 +40,41 @@ def generate_review_sample(
         seed: Random seed for reproducibility (default: 42)
     
     Returns:
-        DataFrame with review sample
+        DataFrame with review sample and sampling metadata
     """
     print(f"Loading classifications from {classifications_path}...")
     df = pd.read_csv(classifications_path, parse_dates=['award_date'])
     
     np.random.seed(seed)
     
-    # Define strata
+    # Define strata - fixed sample sizes
     categories = ['direct', 'integrated', 'adjacent', 'not_mh', 'uncertain']
     per_category = sample_size // (len(categories) + 1)  # +1 for keyword-negative stratum
     
     samples = []
+    sampling_metadata = []
     
     print(f"\nGenerating stratified sample (total target: {sample_size}):")
+    print(f"⚠️  STRATIFIED SAMPLE - NOT representative of population prevalence")
+    print(f"    Each category sampled equally to ensure evaluation coverage")
     
     # Sample from each automated category
     for category in categories:
         category_df = df[df['mh_category_v1'] == category]
+        population_size = len(category_df)
         
-        if len(category_df) == 0:
+        if population_size == 0:
             print(f"  {category}: No grants available")
             continue
         
         # Stratify within category by confidence
-        n_sample = min(per_category, len(category_df))
+        n_sample = min(per_category, population_size)
+        
+        # Calculate sampling probability
+        sampling_prob = n_sample / population_size if population_size > 0 else 0.0
         
         # Ensure diversity: mix of high, medium, low confidence
-        if len(category_df) >= n_sample:
+        if population_size >= n_sample:
             # Sort by confidence and sample evenly
             category_sorted = category_df.sort_values('mh_confidence_v1')
             indices = np.linspace(0, len(category_sorted) - 1, n_sample, dtype=int)
@@ -68,8 +82,17 @@ def generate_review_sample(
         else:
             category_sample = category_df
         
+        # Record sampling metadata
+        sampling_metadata.append({
+            'stratum': category,
+            'population_size': population_size,
+            'sample_size': len(category_sample),
+            'sampling_probability': sampling_prob,
+            'population_proportion': population_size / len(df)
+        })
+        
         samples.append(category_sample)
-        print(f"  {category}: {len(category_sample)} grants (available: {len(category_df):,})")
+        print(f"  {category}: {len(category_sample)} sampled from {population_size:,} (p={sampling_prob:.4f})")
     
     # Add keyword-negative stratum (not in existing keyword candidates)
     # These are baseline controls
@@ -97,14 +120,31 @@ def generate_review_sample(
                 ].sample(n=min(remaining, len(keyword_negative) - len(keyword_neg_sample)), random_state=seed)
                 keyword_neg_sample = pd.concat([keyword_neg_sample, other_keyword_neg])
         
+        sampling_prob_kn = len(keyword_neg_sample) / len(keyword_negative) if len(keyword_negative) > 0 else 0.0
+        sampling_metadata.append({
+            'stratum': 'keyword_negative',
+            'population_size': len(keyword_negative),
+            'sample_size': len(keyword_neg_sample),
+            'sampling_probability': sampling_prob_kn,
+            'population_proportion': len(keyword_negative) / len(df)
+        })
+        
         samples.append(keyword_neg_sample)
-        print(f"  keyword_negative: {len(keyword_neg_sample)} grants (available: {len(keyword_negative):,})")
+        print(f"  keyword_negative: {len(keyword_neg_sample)} sampled from {len(keyword_negative):,} (p={sampling_prob_kn:.4f})")
     
     # Combine all samples
     review_sample = pd.concat(samples, ignore_index=True)
     
     # Shuffle to avoid ordering bias
     review_sample = review_sample.sample(frac=1, random_state=seed).reset_index(drop=True)
+    
+    # Save sampling metadata
+    metadata_df = pd.DataFrame(sampling_metadata)
+    metadata_path = output_path.replace('.csv', '_sampling_metadata.csv')
+    metadata_df.to_csv(metadata_path, index=False)
+    print(f"\n📊 Sampling metadata saved to: {metadata_path}")
+    print("\nTo estimate population-level metrics, apply inverse probability weights:")
+    print("  weight = population_proportion / (sample_size / total_sample_size)")
     
     # Prepare review CSV with necessary columns
     review_csv = review_sample[[
@@ -174,12 +214,19 @@ def generate_review_sample(
     print('='*80)
     print(f"File: {output_path}")
     print(f"Total grants: {len(review_csv)}")
+    print(f"\n⚠️  IMPORTANT: This is a STRATIFIED sample, NOT representative of population")
+    print(f"    - Rare categories oversampled (integrated, uncertain)")
+    print(f"    - Common categories undersampled (not_mh)")
+    print(f"    - Sample metrics ≠ population metrics")
+    print(f"    - Use sampling weights for population estimates")
     print("\nInstructions for reviewers:")
     print("1. Fill in 'human_category' column: direct, integrated, adjacent, not_mh, or uncertain")
     print("2. Fill in 'reviewer_confidence': high, medium, or low")
     print("3. Add notes in 'reviewer_notes' for borderline/uncertain cases")
     print("4. Enter your ID in 'reviewer_id' and date in 'review_date'")
     print("\nDo not fabricate reviews. Return completed CSV for evaluation.")
+    print(f"\nSampling seed: {seed} (for reproducibility)")
+    print(f"Sampling metadata: {metadata_path}")
     
     return review_csv
 

@@ -91,17 +91,24 @@ class TestEvaluationMetrics:
         assert metrics['accuracy'] == 1.0
     
     def test_binary_metrics_with_errors(self):
-        """Binary metrics with classification errors"""
-        y_true = pd.Series(['direct', 'not_mh', 'integrated', 'not_mh'])
-        y_pred = pd.Series(['not_mh', 'not_mh', 'integrated', 'adjacent'])
+        """Binary metrics with classification errors and abstentions"""
+        y_true = pd.Series(['direct', 'not_mh', 'integrated', 'not_mh', 'uncertain'])
+        y_pred = pd.Series(['not_mh', 'not_mh', 'integrated', 'adjacent', 'uncertain'])
         
         metrics = compute_binary_metrics(y_true, y_pred)
         
-        # Relevant: direct, integrated
-        # Not relevant: adjacent, not_mh
-        # y_true relevant: [1, 0, 1, 0]
-        # y_pred relevant: [0, 0, 1, 0]
-        # TP=1, FP=0, FN=1, TN=2
+        # With uncertain: n_total=5, n_pred_uncertain=1, abstention_rate=0.2
+        assert metrics['n_total'] == 5
+        assert metrics['n_predicted_uncertain'] == 1
+        assert metrics['abstention_rate'] == 0.2
+        assert metrics['classification_coverage'] == 0.8
+        
+        # After filtering out uncertain predictions:
+        # y_true: [direct, not_mh, integrated, not_mh]
+        # y_pred: [not_mh, not_mh, integrated, adjacent]
+        # Relevant: direct, integrated -> binary: [1, 0, 1, 0]
+        # Not relevant: adjacent, not_mh -> binary: [0, 0, 1, 0]
+        # TP=1 (position 2), FP=0, FN=1 (position 0), TN=2 (positions 1,3)
         
         assert metrics['true_positives'] == 1
         assert metrics['false_positives'] == 0
@@ -109,6 +116,7 @@ class TestEvaluationMetrics:
         assert metrics['true_negatives'] == 2
         assert metrics['precision'] == 1.0  # TP/(TP+FP) = 1/1
         assert metrics['recall'] == 0.5      # TP/(TP+FN) = 1/2
+        assert metrics['n_samples'] == 4     # 4 classified (excluding uncertain prediction)
     
     def test_multiclass_metrics(self):
         """Multi-class metrics across categories"""
@@ -159,6 +167,9 @@ class TestDataIntegrity:
         
         # All should start as automated
         assert (classifications['review_status'] == 'automated').all()
+        
+        # Check version is updated
+        assert (classifications['classifier_version'] == 'v1.0.1').all()
     
     def test_classifications_categories_valid(self):
         """Only valid categories should be used"""
@@ -202,6 +213,33 @@ class TestDataIntegrity:
         
         # Should be 200-300 grants
         assert 200 <= len(review_sample) <= 300
+    
+    def test_sampling_metadata_exists(self):
+        """Sampling metadata file should be generated"""
+        assert Path('data/wellcome_mh_review_sample_v1_sampling_metadata.csv').exists()
+    
+    def test_sampling_metadata_content(self):
+        """Sampling metadata should have correct structure"""
+        metadata = pd.read_csv('data/wellcome_mh_review_sample_v1_sampling_metadata.csv')
+        
+        required_cols = ['stratum', 'population_size', 'sample_size', 'sampling_probability', 'population_proportion']
+        for col in required_cols:
+            assert col in metadata.columns, f"Missing column: {col}"
+        
+        # Should have all strata
+        expected_strata = {'direct', 'integrated', 'adjacent', 'not_mh', 'uncertain', 'keyword_negative'}
+        actual_strata = set(metadata['stratum'].unique())
+        assert expected_strata == actual_strata
+        
+        # Sampling probabilities should be between 0 and 1
+        assert (metadata['sampling_probability'] >= 0).all()
+        assert (metadata['sampling_probability'] <= 1).all()
+        
+        # Population proportions should sum to approximately 1
+        # (keyword_negative overlaps with categories, so won't sum exactly to 1)
+        # Just check they're reasonable
+        assert (metadata['population_proportion'] > 0).all()
+        assert (metadata['population_proportion'] < 1).all()
 
 class TestSafeguards:
     """Test safeguards against misuse"""
@@ -254,7 +292,7 @@ class TestReproducibility:
         """Classifier version should be recorded"""
         classifications = pd.read_csv('data/wellcome_mh_classifications_v1.csv')
         assert 'classifier_version' in classifications.columns
-        assert (classifications['classifier_version'] == 'v1.0').all()
+        assert (classifications['classifier_version'] == 'v1.0.1').all()
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

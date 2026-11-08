@@ -39,19 +39,40 @@ def compute_binary_metrics(y_true: pd.Series, y_pred: pd.Series) -> Dict[str, fl
     
     Relevant = direct + integrated
     Not relevant = adjacent + not_mh
-    Uncertain excluded from metrics
+    Uncertain predictions are reported separately as abstentions.
+    
+    NOTE: Uncertain predictions are NOT treated as negative classifications.
+    Abstention rate and classification coverage are reported separately.
     """
     # Map categories to binary
     relevant_categories = {'direct', 'integrated'}
     not_relevant_categories = {'adjacent', 'not_mh'}
     
-    # Filter out uncertain
-    mask = y_true.isin(relevant_categories | not_relevant_categories)
+    # Total sample size
+    n_total = len(y_true)
+    
+    # Count uncertain predictions (abstentions)
+    n_pred_uncertain = (y_pred == 'uncertain').sum()
+    abstention_rate = n_pred_uncertain / n_total if n_total > 0 else 0.0
+    classification_coverage = 1 - abstention_rate
+    
+    # Filter: only evaluate where human labeled as relevant or not_relevant
+    # AND prediction was not uncertain
+    mask_human = y_true.isin(relevant_categories | not_relevant_categories)
+    mask_pred = y_pred.isin(relevant_categories | not_relevant_categories)
+    mask = mask_human & mask_pred
+    
     y_true_filtered = y_true[mask]
     y_pred_filtered = y_pred[mask]
     
     if len(y_true_filtered) == 0:
-        return {'error': 'No relevant/not_relevant labels for binary metrics'}
+        return {
+            'error': 'No relevant/not_relevant labels for binary metrics',
+            'abstention_rate': abstention_rate,
+            'classification_coverage': classification_coverage,
+            'n_total': int(n_total),
+            'n_predicted_uncertain': int(n_pred_uncertain)
+        }
     
     # Convert to binary
     y_true_binary = y_true_filtered.isin(relevant_categories).astype(int)
@@ -77,7 +98,12 @@ def compute_binary_metrics(y_true: pd.Series, y_pred: pd.Series) -> Dict[str, fl
         'false_positives': int(fp),
         'false_negatives': int(fn),
         'true_negatives': int(tn),
-        'n_samples': len(y_true_filtered)
+        'n_samples': len(y_true_filtered),
+        'abstention_rate': abstention_rate,
+        'classification_coverage': classification_coverage,
+        'n_total': int(n_total),
+        'n_predicted_uncertain': int(n_pred_uncertain),
+        'n_human_uncertain': int((y_true == 'uncertain').sum())
     }
 
 def compute_multiclass_metrics(y_true: pd.Series, y_pred: pd.Series) -> Dict[str, any]:
@@ -164,9 +190,17 @@ def evaluate_classification(review_sample_path: str, output_path: str = None) ->
     print("\n### BINARY CLASSIFICATION (Mental Health Relevant vs Not) ###")
     binary_metrics = compute_binary_metrics(y_true, y_pred)
     
+    # Report abstention/coverage first
+    print(f"  Total samples:       {binary_metrics['n_total']}")
+    print(f"  Predicted uncertain: {binary_metrics['n_predicted_uncertain']}")
+    print(f"  Abstention rate:     {binary_metrics['abstention_rate']:.3f}")
+    print(f"  Classification coverage: {binary_metrics['classification_coverage']:.3f}")
+    print(f"  Human labeled uncertain: {binary_metrics.get('n_human_uncertain', 0)}")
+    
     if 'error' in binary_metrics:
-        print(f"  {binary_metrics['error']}")
+        print(f"\n  {binary_metrics['error']}")
     else:
+        print(f"\n  Performance on classified samples:")
         print(f"  Precision: {binary_metrics['precision']:.3f}")
         print(f"  Recall:    {binary_metrics['recall']:.3f}")
         print(f"  F1 Score:  {binary_metrics['f1_score']:.3f}")
@@ -175,6 +209,7 @@ def evaluate_classification(review_sample_path: str, output_path: str = None) ->
         print(f"  False Positives: {binary_metrics['false_positives']}")
         print(f"  False Negatives: {binary_metrics['false_negatives']}")
         print(f"  True Negatives:  {binary_metrics['true_negatives']}")
+        print(f"  Evaluated samples: {binary_metrics['n_samples']}")
     
     # Multi-class metrics
     print("\n### MULTI-CLASS CLASSIFICATION (By Category) ###")

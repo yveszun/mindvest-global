@@ -68,23 +68,23 @@ DIRECT_MH_MEDIUM = [
 ]
 
 INTEGRATED_MH_PATTERNS = [
-    # Integration keywords
-    (r'\bintegrated\b', r'\b(mental\s+health|psychosocial|psychological)\b'),
+    # Integration keywords - require explicit mental health terms
+    (r'\bintegrated\b', r'\b(mental\s+health|psychosocial|psychological\s+(support|services?))\b'),
     
-    # HIV/AIDS + mental health
-    (r'\b(hiv|aids)\b', r'\b(mental\s+health|depression|psychological)\b'),
+    # HIV/AIDS + mental health (must have explicit MH component)
+    (r'\b(hiv|aids)\b', r'\b(mental\s+health|depression|psychological\s+(distress|support|wellbeing))\b'),
     
-    # Maternal/perinatal + mental health  
-    (r'\b(maternal|perinatal|postnatal|postpartum)\b', r'\b(depression|mental\s+health|psychosocial)\b'),
+    # Maternal/perinatal + mental health (must specify depression or MH)
+    (r'\b(maternal|perinatal|postnatal|postpartum|antenatal)\b', r'\b(depression|mental\s+health|psychosocial\s+support)\b'),
     
-    # Primary care + mental health
-    (r'\b(primary\s+care|community\s+health)\b', r'\b(mental\s+health|screening|psychological)\b'),
+    # Primary care + mental health (must be mental health in context, not just "screening")
+    (r'\b(primary\s+care|community\s+health\s+program)', r'\b(mental\s+health\s+(screening|integration|services)|psychological\s+services)\b'),
     
     # Humanitarian + psychosocial
-    (r'\bhumanitarian\b', r'\b(psychosocial\s+support|mental\s+health)\b'),
+    (r'\bhumanitarian\b', r'\b(psychosocial\s+support|mental\s+health\s+(services|support))\b'),
     
-    # NCD + mental health
-    (r'\bnon[-\s]?communicable\s+disease[s]?\b', r'\b(mental\s+health|depression)\b'),
+    # NCD + mental health (explicit comorbidity)
+    (r'\bnon[-\s]?communicable\s+disease[s]?\b', r'\b(mental\s+health|depression|psychological)\b'),
 ]
 
 ADJACENT_NEUROSCIENCE = [
@@ -182,12 +182,21 @@ def classify_grant(title: str, description: str) -> Tuple[str, float, str]:
         return "direct", confidence, f"Direct MH: {evidence}"
     
     # Priority 2: Integrated Mental Health
+    # Integrated requires: broader programme indicator AND mental health component
+    # BUT not if already has strong direct MH signals
     for pattern1, pattern2 in INTEGRATED_MH_PATTERNS:
         if check_pattern_pair(combined, pattern1, pattern2):
-            # Check if already classified as direct
-            # Integrated requires both broader programme AND mental health component
+            # Don't classify as integrated if title has strong direct MH terms
+            title_has_direct_mh = find_matches(title_norm, DIRECT_MH_STRONG)
+            if title_has_direct_mh:
+                # This is direct MH, not integrated
+                confidence = 0.90
+                evidence = "; ".join(title_has_direct_mh[:2])
+                return "direct", confidence, f"Direct MH (title): {evidence}"
+            
+            # True integrated: MH component within broader program
             confidence = 0.80 if check_pattern_pair(title_norm, pattern1, pattern2) else 0.70
-            evidence = f"{pattern1} + {pattern2}"
+            evidence = f"Broader program + MH component"
             return "integrated", confidence, f"Integrated MH: {evidence}"
     
     # Check if has medium mental health signal but not strong enough for direct
