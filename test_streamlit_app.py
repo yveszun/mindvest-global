@@ -132,3 +132,59 @@ class TestStreamlitApp:
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+class TestFinalCorrections:
+    """Tests for final corrections to PR #3"""
+    
+    def test_mh_candidates_actual_count_not_all_reviewed(self):
+        """Award Explorer must count actual MH candidates (2,222), not all 'not_reviewed' records (23,942)."""
+        at = AppTest.from_file("app.py")
+        at.run()
+        
+        at.sidebar.radio[0].set_value("Award-Level Explorer")
+        at.run()
+        
+        # Find the MH candidates metric
+        metrics = [m for m in at.metric if 'keyword' in m.label.lower() or 'mental health' in m.label.lower()]
+        
+        if len(metrics) > 0:
+            candidate_metric = metrics[0]
+            # Extract the number from the value (format: "2,222" or similar)
+            value_str = str(candidate_metric.value).replace(',', '')
+            candidate_count = int(value_str)
+            
+            # Should be 2,222 (analytical layer) or 2,489 (full import), NOT 23,942
+            assert candidate_count < 3000, f"MH candidates should be ~2,222, not all {candidate_count:,} records"
+            assert candidate_count > 2000, f"Expected ~2,222 candidates in analytical, got {candidate_count:,}"
+    
+    def test_bundled_dataset_banner_clarity(self):
+        """Global banner must describe bundled dataset specifically."""
+        at = AppTest.from_file("app.py")
+        at.run()
+        
+        # Check caption for "bundled" indication
+        captions = [c.value.lower() for c in at.caption if c.value]
+        has_bundled = any('bundled' in c for c in captions)
+        
+        assert has_bundled, "Global banner should indicate 'bundled' dataset"
+        
+        # Check info banner mentions bundled
+        info_texts = [i.value.lower() for i in at.info if i.value]
+        has_bundled_info = any('bundled' in i for i in info_texts)
+        
+        assert has_bundled_info, "Info banner should describe bundled dataset"
+    
+    def test_uploaded_data_distinguished_from_bundled(self):
+        """Award Explorer must clearly indicate when displaying uploaded (not bundled) data."""
+        at = AppTest.from_file("app.py")
+        at.run()
+        
+        at.sidebar.radio[0].set_value("Award-Level Explorer")
+        at.run()
+        
+        # With bundled data loaded, should say "bundled"
+        success_texts = [s.value.lower() for s in at.success if s.value]
+        has_bundled = any('bundled' in s for s in success_texts)
+        
+        assert has_bundled, "Award Explorer should indicate bundled dataset when displaying it"

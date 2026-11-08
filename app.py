@@ -34,14 +34,14 @@ st.title('MindVest Global')
 
 # Conditional banner based on actual loaded dataset
 if dataset_status == 'full':
-    st.caption(f'Mental health investment intelligence | Complete official Wellcome grants ({record_count:,} records, 2000-2026) + clearly labeled synthetic modules')
-    st.info(f'📊 COMPLETE DATASET: Award-Level Explorer includes {record_count:,} analytically eligible Wellcome grants (£{total_amount/1e9:.1f} billion, 2000-2026). Mental health keyword candidates are unreviewed and require manual classification.')
+    st.caption(f'Mental health investment intelligence | Bundled: Complete official Wellcome grants ({record_count:,} records, 2000-2026) + clearly labeled synthetic modules')
+    st.info(f'📊 BUNDLED DATASET: {record_count:,} official Wellcome grants (£{total_amount/1e9:.1f} billion, 2000-2026, amount > £0). Award-Level Explorer displays bundled data by default; uploaded alternatives are clearly indicated. Mental health keyword candidates (2,489) are unreviewed.')
 elif dataset_status == 'legacy':
-    st.caption('Mental health investment intelligence | Demonstration extract + clearly labeled synthetic modules')
-    st.error(f'⚠️ LEGACY EXTRACT: Award-Level Explorer contains only {record_count:,} records (demonstration extract, not representative). Run PYTHONPATH=./lib python import_full_wellcome.py to upgrade to the complete 23,942-record dataset.')
+    st.caption('Mental health investment intelligence | Bundled: Demonstration extract + clearly labeled synthetic modules')
+    st.error(f'⚠️ BUNDLED LEGACY EXTRACT: Only {record_count:,} records bundled (demonstration extract, not representative). Run PYTHONPATH=./lib python import_full_wellcome.py to upgrade to the complete 23,942-record dataset.')
 else:
     st.caption('Mental health investment intelligence | Clearly labeled synthetic modules')
-    st.warning('⚠️ NO WELLCOME DATA: Award-Level Explorer requires dataset. Upload official Wellcome grants spreadsheet or run import pipeline.')
+    st.warning('⚠️ NO BUNDLED WELLCOME DATA: Award-Level Explorer requires dataset. Upload official Wellcome grants spreadsheet or run import pipeline.')
 
 st.warning('SYNTHETIC: Funder Discovery, Behavioral Intelligence, Capital Gaps and Prospect Dossier use fictional data. No BehaviorGPT calls are made.')
 page = st.sidebar.radio('Explore', ['Verified Evidence', 'Award-Level Explorer', 'Mental Health Triage', 'Classification Validation', 'Overview', 'Funder Discovery', 'Behavioral Intelligence', 'Capital Gaps', 'Prospect Dossier', 'BehaviorGPT Readiness'])
@@ -97,26 +97,34 @@ elif page == 'Award-Level Explorer':
         else:
             if data_source == 'uploaded':
                 st.success(f'✓ {len(awards):,} records loaded from your uploaded file.')
-                st.info('⚠️ UPLOADED DATA: Verify data provenance, completeness and currency independently before use.')
+                st.warning('⚠️ UPLOADED DATA (not bundled dataset): Verify data provenance, completeness and currency independently before use. The global banner describes the bundled dataset, not this upload.')
             elif data_source == 'full':
                 total_amount = awards['amount_gbp'].sum()
-                st.success(f'✓ {len(awards):,} grants loaded from complete official Wellcome dataset (£{total_amount:,.0f}, amount > £0)')
-                st.info('📊 SOURCE: Official Wellcome grants awarded 1 October 2000 to 9 September 2026. Zero-amount records (studentships, institutional awards) excluded from analytical layer. See data/FULL_WELLCOME_IMPORT_AUDIT.md for reconciliation.')
+                st.success(f'✓ {len(awards):,} grants loaded from bundled official Wellcome dataset (£{total_amount:,.0f}, amount > £0)')
+                st.info('📊 BUNDLED SOURCE: Official Wellcome grants awarded 1 October 2000 to 9 September 2026. Zero-amount records (studentships, institutional awards) excluded from analytical layer. See data/FULL_WELLCOME_IMPORT_AUDIT.md for reconciliation.')
             elif data_source == 'legacy':
-                st.success(f'{len(awards):,} records loaded from legacy demonstration extract.')
-                st.error('⚠️ LEGACY DATA: This is a 600-row extract, NOT the full dataset. Upgrade by running: PYTHONPATH=./lib python import_full_wellcome.py')
+                st.success(f'{len(awards):,} records loaded from bundled legacy demonstration extract.')
+                st.error('⚠️ BUNDLED LEGACY DATA: This is a 600-row extract, NOT the full dataset. Upgrade by running: PYTHONPATH=./lib python import_full_wellcome.py')
             
-            # Mental health candidates metric
-            if 'mental_health_flag' in awards.columns:
-                mh_candidates = awards['mental_health_flag'].isin(['keyword_candidate_unreviewed', 'not_reviewed'])
-                n = int(mh_candidates.sum())
-                if n > 0:
+            # Mental health candidates metric - count only actual keyword matches in displayed dataset
+            # Load the candidate file to identify actual MH candidates (not all 'not_reviewed' records)
+            mh_candidate_file = ROOT / 'wellcome_full_mh_candidates_unreviewed.csv'
+            if mh_candidate_file.exists() and 'grant_id' in awards.columns:
+                mh_candidates_df = pd.read_csv(mh_candidate_file)
+                candidate_ids = set(mh_candidates_df['grant_id'])
+                n = awards['grant_id'].isin(candidate_ids).sum()
+                
+                if n > 0 or data_source == 'full':
                     col1, col2 = st.columns(2)
                     with col1:
                         st.metric('Total grants', f'{len(awards):,}')
                     with col2:
-                        st.metric('Unreviewed keyword candidates', f'{n:,}')
-                    st.caption('⚠️ Keyword candidates require manual review. NOT verified mental health funding.')
+                        st.metric('Mental health keyword candidates', f'{n:,}')
+                    
+                    if data_source == 'full':
+                        st.caption(f'⚠️ {n:,} keyword candidates in analytical layer (amount > £0). Total candidates across all layers: 2,489 (includes 267 zero-amount). All require manual review. NOT verified mental health funding.')
+                    else:
+                        st.caption('⚠️ Keyword candidates require manual review. NOT verified mental health funding.')
             
             # Award activity by year
             if 'award_date' in awards.columns:

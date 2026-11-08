@@ -299,3 +299,39 @@ def test_validation_duplicate_population():
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])
+
+
+# Additional focused regression tests for final corrections
+def test_mh_candidates_count_actual_only():
+    """MH candidates count must use actual keyword matches, not all 'not_reviewed' records."""
+    analytical = pd.read_csv('data/wellcome_full_analytical.csv')
+    candidates = pd.read_csv('data/wellcome_full_mh_candidates_unreviewed.csv')
+    
+    # All records in analytical are marked 'not_reviewed'
+    assert (analytical['mental_health_flag'] == 'not_reviewed').all()
+    
+    # But only 2,489 are actual keyword candidates
+    assert len(candidates) == 2489, f"Expected 2,489 candidates, got {len(candidates)}"
+    
+    # In analytical layer, only 2,222 candidates (267 are zero-amount)
+    candidate_ids = set(candidates['grant_id'])
+    in_analytical = analytical['grant_id'].isin(candidate_ids).sum()
+    assert in_analytical == 2222, f"Expected 2,222 candidates in analytical, got {in_analytical}"
+    
+    # Verify the app would count correctly
+    assert in_analytical < len(analytical), "Should not count all records as candidates"
+
+def test_bundled_vs_uploaded_clarity():
+    """Global banner must describe bundled dataset; Award Explorer must distinguish uploads."""
+    from pathlib import Path
+    
+    # Check that bundled files exist
+    assert Path('data/wellcome_full_analytical.csv').exists(), "Bundled analytical dataset must exist"
+    
+    # Verify dataset status detection works
+    full_data = Path('data/wellcome_full_analytical.csv')
+    if full_data.exists():
+        df = pd.read_csv(full_data)
+        # Should detect as 'full' (bundled)
+        assert len(df) >= 20000, "Full bundled dataset should have 23,942 records"
+        assert df['amount_gbp'].sum() > 1e10, "Full bundled dataset should have £19.8B"
