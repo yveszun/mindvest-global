@@ -1,6 +1,56 @@
-# MindVest Global — working MVP
+# MindVest Global — working MVP with complete Wellcome dataset
 
-**Status:** Offline synthetic-data prototype. No live financing evidence or BehaviorGPT prediction is represented as real.
+**Status:** Offline prototype with real Wellcome grant data (2000-2026) + clearly labeled synthetic modules. No BehaviorGPT predictions.
+
+## Quick Start
+
+Requires Python 3.11+.
+
+```bash
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+streamlit run app.py
+```
+
+## Complete Wellcome Dataset (November 2026)
+
+This repository now includes the **complete official Wellcome grants dataset**: 23,942 analytically eligible awards totaling £19.8 billion (2000-2026). The bundled file (`data/wellcome_full_analytical.csv`) excludes zero-amount records (studentships, institutional awards) to focus on financial analysis.
+
+### Data Layers
+
+1. **Analytical Layer** (`wellcome_full_analytical.csv`): 23,942 awards with amount > £0 (bundled)
+2. **Mental Health Candidates** (`wellcome_full_mh_candidates_unreviewed.csv`): 2,489 keyword matches (UNREVIEWED)
+3. **Exclusions Log** (`wellcome_full_exclusions.csv`): Audit trail of excluded records
+4. **Raw Source & Full Import**: Not committed (regenerate locally, see below)
+
+### Reproducible Import Pipeline
+
+To regenerate all data layers from the official Wellcome workbook:
+
+```bash
+# 1. Download official workbook from https://wellcome.org/research-funding/funding-portfolio
+# 2. Place in data/ directory as: data/Wellcome-grants-awarded-1-October-2000-to-9-September-2026.xlsx
+# 3. Run import pipeline:
+PYTHONPATH=./lib python import_full_wellcome.py
+```
+
+This generates:
+- Complete audit report: `data/FULL_WELLCOME_IMPORT_AUDIT.md`
+- All 5 data layers with reconciliation
+- Deterministic, reproducible output
+- No network calls or external data transmission
+
+### Source Attribution
+
+**Data Source**: Wellcome Trust grants database, licensed under CC BY 4.0  
+**Source URL**: https://wellcome.org/research-funding/funding-portfolio  
+**Coverage**: Awards from 1 October 2000 to 9 September 2026  
+**Total Records**: 26,288 (including 2,346 zero-amount records)  
+**Analytical Records**: 23,942 grants (amount > £0)  
+**Total Amount**: £19,787,008,487.33
+
+See `data/FULL_WELLCOME_IMPORT_AUDIT.md` for complete reconciliation.
 
 ## Start
 
@@ -17,9 +67,19 @@ The app expects CSV datasets in the `data/` subdirectory.
 
 ## Tests
 
+Run all tests including full import validation:
+
 ```bash
-pytest -q
+PYTHONPATH=./lib pytest -v
 ```
+
+Test coverage:
+- Full dataset import and reconciliation (28 tests)
+- Date parsing for Excel datetime columns
+- Duplicate detection and exclusion tracking
+- Financial reconciliation and reproducibility
+- App integration and data layer integrity
+- Validation logic and error handling
 
 ## Structure
 
@@ -40,17 +100,14 @@ No BehaviorGPT calls are made in the MVP. An approved catalog upload is a separa
 ## Verified-evidence pilot (November 2026)
 Open the **Verified Evidence** view for six sourced Wellcome annual-report observations. These are aggregates, not individual awards. All other dashboard views remain synthetic. See `docs/REAL_DATA_ROADMAP.md` for the acquisition and validation plan.
 
-## Award-level ingestion (new)
-Download Wellcome's award spreadsheet from https://wellcome.org/research-funding/funding-portfolio (Wellcome states the data are CC BY 4.0, attribution required). Either upload the spreadsheet in **Award-Level Explorer** or run:
+## Award-Level Explorer
 
-```bash
-python wellcome_import.py ~/Downloads/wellcome-grants.xlsx --output data/wellcome_awards_imported.csv
-```
+The **Award-Level Explorer** view displays the complete 23,942-record Wellcome analytical dataset by default. Users can optionally upload alternative exports. The view clearly distinguishes:
 
-The importer detects common column headings, removes duplicate grant IDs, preserves grant dates and source attribution, and deliberately leaves all mental-health classification unreviewed. The official spreadsheet was **not** bundled: network access to download it was unavailable in this build environment. The importer needs validation against the current actual spreadsheet headings before production use. No model calls or third-party uploads occur.
+- **Bundled complete dataset**: 23,942 official Wellcome grants (2000-2026)
+- **User uploads**: Independently verified provenance required
 
-## ⚠️ Demonstration Dataset (Limited Extract)
-**IMPORTANT**: The Wellcome CSV files in this repository (`data/wellcome_awards_imported.csv`, `data/wellcome_mental_health_triage.csv`) contain only the **first 600 rows** of the original dataset to make GitHub upload manageable. This is a **non-representative demonstration extract** and must NOT be used for population-wide inference, financial estimates, or mental health investment trends. The full dataset (26,288 records) is available separately. See `GITHUB_STARTER_NOTE.txt` for details.
+Mental health keyword candidates (2,489 records) are flagged as UNREVIEWED and require manual classification. All thematic classifications are automated screening, not verified by domain experts.
 
 ## Mental-health triage (new)
 

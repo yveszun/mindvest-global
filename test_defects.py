@@ -29,9 +29,11 @@ class TestCriticalDefects:
         
         assert len(success_elements) > 0, "Should show success message"
         
-        # With bundled data, should mention "bundled demonstration data"
+        # With full bundled dataset, should show actual count and dataset type
         success_text = ' '.join([str(elem.value) for elem in success_elements])
-        assert 'bundled demonstration data' in success_text.lower() or 'demonstration' in success_text.lower()
+        assert ('23,942' in success_text or 'complete official' in success_text.lower() or 
+                'full dataset' in success_text.lower()), \
+            f"Expected full dataset indicator, got: {success_text}"
 
 
 class TestHighSeverityDefects:

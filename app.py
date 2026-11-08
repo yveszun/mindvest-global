@@ -6,13 +6,44 @@ from scoring import rank_opportunities, funding_gap
 ROOT = Path(__file__).parent / 'data'
 def load(name):
     return pd.read_csv(ROOT / f'{name}.csv')
+
+# Detect available dataset for status banner
+def get_dataset_status():
+    """Determine which Wellcome dataset is available."""
+    full_data = ROOT / 'wellcome_full_analytical.csv'
+    legacy_data = ROOT / 'wellcome_awards_imported.csv'
+    
+    if full_data.exists():
+        df = pd.read_csv(full_data)
+        # Verify it's the full dataset by checking row count and amount
+        if len(df) >= 20000 and df['amount_gbp'].sum() > 1e10:
+            return 'full', len(df), df['amount_gbp'].sum()
+    
+    if legacy_data.exists():
+        df = pd.read_csv(legacy_data)
+        return 'legacy', len(df), df['amount_gbp'].sum()
+    
+    return 'none', 0, 0
+
+dataset_status, record_count, total_amount = get_dataset_status()
+
 funders, investments, opportunities = load('funders'), load('investments'), load('opportunities')
 needs, links, evidence = load('needs'), load('theme_links'), load('evidence')
 st.set_page_config(page_title='MindVest Global', page_icon='🧠', layout='wide')
 st.title('MindVest Global')
-st.caption('Mental health investment intelligence | Real Wellcome grant records + clearly labeled synthetic modules')
-st.error('⚠️ DEMONSTRATION DATASET: Wellcome CSV files contain only 600-row extract (not 26,288 full records). This is NOT a representative sample and MUST NOT be used for population inference, financial estimates, or trend analysis. See GITHUB_STARTER_NOTE.txt.')
-st.warning('SYNTHETIC: Funder Discovery, Behavioral Intelligence, Capital Gaps and Prospect Dossier use fictional data. Wellcome Award-Level Explorer uses real source records. No BehaviorGPT calls are made.')
+
+# Conditional banner based on actual loaded dataset
+if dataset_status == 'full':
+    st.caption(f'Mental health investment intelligence | Bundled: Complete official Wellcome grants ({record_count:,} records, 2000-2026) + clearly labeled synthetic modules')
+    st.info(f'📊 BUNDLED DATASET: {record_count:,} official Wellcome grants (£{total_amount/1e9:.1f} billion, 2000-2026, amount > £0). Award-Level Explorer displays bundled data by default; uploaded alternatives are clearly indicated. Mental health keyword candidates (2,489) are unreviewed.')
+elif dataset_status == 'legacy':
+    st.caption('Mental health investment intelligence | Bundled: Demonstration extract + clearly labeled synthetic modules')
+    st.error(f'⚠️ BUNDLED LEGACY EXTRACT: Only {record_count:,} records bundled (demonstration extract, not representative). Run PYTHONPATH=./lib python import_full_wellcome.py to upgrade to the complete 23,942-record dataset.')
+else:
+    st.caption('Mental health investment intelligence | Clearly labeled synthetic modules')
+    st.warning('⚠️ NO BUNDLED WELLCOME DATA: Award-Level Explorer requires dataset. Upload official Wellcome grants spreadsheet or run import pipeline.')
+
+st.warning('SYNTHETIC: Funder Discovery, Behavioral Intelligence, Capital Gaps and Prospect Dossier use fictional data. No BehaviorGPT calls are made.')
 page = st.sidebar.radio('Explore', ['Verified Evidence', 'Award-Level Explorer', 'Mental Health Triage', 'Classification Validation', 'Overview', 'Funder Discovery', 'Behavioral Intelligence', 'Capital Gaps', 'Prospect Dossier', 'BehaviorGPT Readiness'])
 
 if page == 'Verified Evidence':
@@ -30,49 +61,108 @@ if page == 'Verified Evidence':
 
 elif page == 'Award-Level Explorer':
     st.header('Wellcome award-level explorer')
-    st.caption('Load the official Wellcome grant export locally. This view does not send data to BehaviorGPT.')
+    st.caption('Browse the complete official Wellcome grants dataset (2000-2026) or upload your own export. No data sent to BehaviorGPT.')
     from wellcome_import import import_awards
-    upload = st.file_uploader('Upload official Wellcome CSV or Excel award export', type=['csv','xlsx','xls'])
-    local = ROOT / 'wellcome_awards_imported.csv'
+    upload = st.file_uploader('Upload alternative Wellcome CSV or Excel export (optional)', type=['csv','xlsx','xls'])
+    
+    # Check for full analytical dataset first, fallback to legacy 600-row extract
+    full_data = ROOT / 'wellcome_full_analytical.csv'
+    legacy_data = ROOT / 'wellcome_awards_imported.csv'
+    
     try:
         uploaded_data = False
+        data_source = None
+        
         if upload is not None:
             import tempfile
             with tempfile.NamedTemporaryFile(suffix=Path(upload.name).suffix,delete=False) as tmp:
                 tmp.write(upload.getvalue()); tmp_path=Path(tmp.name)
-            try: awards=import_awards(tmp_path); uploaded_data=True
+            try: 
+                awards=import_awards(tmp_path)
+                uploaded_data=True
+                data_source='uploaded'
             finally: tmp_path.unlink(missing_ok=True)
-        elif local.exists():
-            awards=pd.read_csv(local,parse_dates=['award_date'])
+        elif full_data.exists():
+            awards=pd.read_csv(full_data,parse_dates=['award_date'])
+            data_source='full'
+        elif legacy_data.exists():
+            awards=pd.read_csv(legacy_data,parse_dates=['award_date'])
+            data_source='legacy'
         else:
             awards=None
+            data_source=None
+        
         if awards is None:
-            st.info('No award-level dataset imported yet. Download the official Wellcome grants spreadsheet from https://wellcome.org/research-funding/funding-portfolio and upload it here, or run the importer.')
+            st.info('No award-level dataset available. Download the official Wellcome grants spreadsheet from https://wellcome.org/research-funding/funding-portfolio and upload it here.')
         else:
-            if uploaded_data:
-                st.success(f'{len(awards):,} records loaded from uploaded file.')
-                st.info('Uploaded dataset displayed. Verify data provenance and completeness independently.')
-            else:
-                st.success(f'{len(awards):,} records loaded from bundled demonstration data.')
-                st.error('⚠️ LIMITATION: This is a 600-row extract (first 600 rows only), NOT the full 26,288-record dataset. It is NOT representative and cannot be used for population-wide inference.')
-            if 'mental_health_flag' in awards.columns:
-                n=int((awards.mental_health_flag=='keyword_candidate_unreviewed').sum())
-                st.metric('Unreviewed mental-health keyword candidates',f'{n:,}')
+            if data_source == 'uploaded':
+                st.success(f'✓ {len(awards):,} records loaded from your uploaded file.')
+                st.warning('⚠️ UPLOADED DATA (not bundled dataset): Verify data provenance, completeness and currency independently before use. The global banner describes the bundled dataset, not this upload.')
+            elif data_source == 'full':
+                total_amount = awards['amount_gbp'].sum()
+                st.success(f'✓ {len(awards):,} grants loaded from bundled official Wellcome dataset (£{total_amount:,.0f}, amount > £0)')
+                st.info('📊 BUNDLED SOURCE: Official Wellcome grants awarded 1 October 2000 to 9 September 2026. Zero-amount records (studentships, institutional awards) excluded from analytical layer. See data/FULL_WELLCOME_IMPORT_AUDIT.md for reconciliation.')
+            elif data_source == 'legacy':
+                st.success(f'{len(awards):,} records loaded from bundled legacy demonstration extract.')
+                st.error('⚠️ BUNDLED LEGACY DATA: This is a 600-row extract, NOT the full dataset. Upgrade by running: PYTHONPATH=./lib python import_full_wellcome.py')
+            
+            # Mental health candidates metric - count only actual keyword matches in displayed dataset
+            # Load the candidate file to identify actual MH candidates (not all 'not_reviewed' records)
+            mh_candidate_file = ROOT / 'wellcome_full_mh_candidates_unreviewed.csv'
+            if mh_candidate_file.exists() and 'grant_id' in awards.columns:
+                mh_candidates_df = pd.read_csv(mh_candidate_file)
+                candidate_ids = set(mh_candidates_df['grant_id'])
+                n = awards['grant_id'].isin(candidate_ids).sum()
+                
+                if n > 0 or data_source == 'full':
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        st.metric('Total grants', f'{len(awards):,}')
+                    with col2:
+                        st.metric('Mental health keyword candidates', f'{n:,}')
+                    
+                    if data_source == 'full':
+                        st.caption(f'⚠️ {n:,} keyword candidates in analytical layer (amount > £0). Total candidates across all layers: 2,489 (includes 267 zero-amount). All require manual review. NOT verified mental health funding.')
+                    else:
+                        st.caption('⚠️ Keyword candidates require manual review. NOT verified mental health funding.')
+            
+            # Award activity by year
             if 'award_date' in awards.columns:
                 awards['award_date']=pd.to_datetime(awards.award_date,errors='coerce')
-                counts=awards.groupby(awards.award_date.dt.year).size().rename('Award count')
-                st.subheader('Award activity by calendar year')
-                st.bar_chart(counts)
-            st.caption('Keyword candidates are not verified mental health awards. The dataset is Wellcome only, not a global funding estimate.')
-            st.warning('Titles and amounts are source records; thematic classifications have NOT been verified. These records are not BehaviorGPT predictions.')
+                valid_dates = awards[awards.award_date.notna()]
+                if len(valid_dates) > 0:
+                    counts=valid_dates.groupby(valid_dates.award_date.dt.year).size().rename('Award count')
+                    st.subheader('Award activity by calendar year')
+                    st.bar_chart(counts)
+            
+            st.caption('Dataset is Wellcome only, not a global funding estimate. Keyword flagging is automated, not manually validated.')
+            st.warning('Titles and amounts are official source records; mental health classifications have NOT been verified by domain experts.')
+            
+            # Search functionality
             term=st.text_input('Search titles and descriptions', 'mental health')
-            subset=awards[awards['title'].fillna('').str.contains(term,case=False,regex=False)|awards['description'].fillna('').str.contains(term,case=False,regex=False)] if term else awards
+            if term:
+                subset=awards[
+                    awards['title'].fillna('').str.contains(term,case=False,regex=False) | 
+                    awards['description'].fillna('').str.contains(term,case=False,regex=False)
+                ]
+            else:
+                subset=awards
+            
             st.metric('Matching records',len(subset))
-            st.dataframe(subset[['grant_id','award_date','title','recipient','amount_gbp','source_url']].head(500),hide_index=True,use_container_width=True)
-            st.download_button('Download matching records',subset.to_csv(index=False),'mindvest_wellcome_filtered.csv')
-            st.caption('Search hits are not a validated mental-health classification. No summation across duplicates, supplements, or incompatible accounting periods is implied.')
+            
+            if len(subset) > 0:
+                display_cols = ['grant_id','award_date','title','recipient','amount_gbp']
+                if 'source_url' in subset.columns:
+                    display_cols.append('source_url')
+                st.dataframe(subset[display_cols].head(500),hide_index=True,use_container_width=True)
+                st.download_button('Download matching records',subset.to_csv(index=False),'mindvest_wellcome_filtered.csv')
+            
+            st.caption('Search hits are not validated mental-health classifications. No summation across duplicates, supplements, or incompatible accounting periods is implied.')
     except Exception as e:
         st.error(f'Import could not be completed: {e}')
+        import traceback
+        with st.expander('Error details'):
+            st.code(traceback.format_exc())
 
 elif page == 'Mental Health Triage':
     st.header('Mental health grant triage — human review required')
