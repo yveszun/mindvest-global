@@ -8,12 +8,12 @@ Requires Python 3.11+.
 
 ```bash
 python -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 streamlit run app.py
 ```
 
-On Windows, activate with `.venv\\Scripts\\activate`.
+The app expects CSV datasets in the `data/` subdirectory.
 
 ## Tests
 
@@ -49,8 +49,8 @@ python wellcome_import.py ~/Downloads/wellcome-grants.xlsx --output data/wellcom
 
 The importer detects common column headings, removes duplicate grant IDs, preserves grant dates and source attribution, and deliberately leaves all mental-health classification unreviewed. The official spreadsheet was **not** bundled: network access to download it was unavailable in this build environment. The importer needs validation against the current actual spreadsheet headings before production use. No model calls or third-party uploads occur.
 
-## Actual Wellcome export imported (8 November 2026)
-The `data/wellcome_awards_imported.csv` file contains 26,288 grant records parsed from the user-provided Wellcome export (1 October 2000–9 September 2026). There are 1,364 broad mental-health keyword candidates **requiring manual verification**. These are not confirmed mental health grants. The source workbook is not bundled. No BehaviorGPT call has been made. `wellcome_import.py` has been updated for the source's real column headings and Excel serial dates. See `docs/WELLCOME_IMPORT_AUDIT.md`.
+## ⚠️ Demonstration Dataset (Limited Extract)
+**IMPORTANT**: The Wellcome CSV files in this repository (`data/wellcome_awards_imported.csv`, `data/wellcome_mental_health_triage.csv`) contain only the **first 600 rows** of the original dataset to make GitHub upload manageable. This is a **non-representative demonstration extract** and must NOT be used for population-wide inference, financial estimates, or mental health investment trends. The full dataset (26,288 records) is available separately. See `GITHUB_STARTER_NOTE.txt` for details.
 
 ## Mental-health triage (new)
 
