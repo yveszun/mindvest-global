@@ -11,6 +11,7 @@ needs, links, evidence = load('needs'), load('theme_links'), load('evidence')
 st.set_page_config(page_title='MindVest Global', page_icon='🧠', layout='wide')
 st.title('MindVest Global')
 st.caption('Mental health investment intelligence | Real Wellcome grant records + clearly labeled synthetic modules')
+st.error('⚠️ DEMONSTRATION DATASET: Wellcome CSV files contain only 600-row extract (not 26,288 full records). This is NOT a representative sample and MUST NOT be used for population inference, financial estimates, or trend analysis. See GITHUB_STARTER_NOTE.txt.')
 st.warning('SYNTHETIC: Funder Discovery, Behavioral Intelligence, Capital Gaps and Prospect Dossier use fictional data. Wellcome Award-Level Explorer uses real source records. No BehaviorGPT calls are made.')
 page = st.sidebar.radio('Explore', ['Verified Evidence', 'Award-Level Explorer', 'Mental Health Triage', 'Classification Validation', 'Overview', 'Funder Discovery', 'Behavioral Intelligence', 'Capital Gaps', 'Prospect Dossier', 'BehaviorGPT Readiness'])
 
@@ -47,7 +48,8 @@ elif page == 'Award-Level Explorer':
         if awards is None:
             st.info('No award-level dataset imported yet. Download the official Wellcome grants spreadsheet from https://wellcome.org/research-funding/funding-portfolio and upload it here, or run the importer.')
         else:
-            st.success(f'{len(awards):,} source-backed awarded-grant records loaded.')
+            st.success(f'{len(awards):,} records loaded from 600-row demonstration extract.')
+            st.error('⚠️ LIMITATION: This is a 600-row extract (first 600 rows only), NOT the full 26,288-record dataset. It is NOT representative and cannot be used for population-wide inference.')
             if 'mental_health_flag' in awards.columns:
                 n=int((awards.mental_health_flag=='keyword_candidate_unreviewed').sum())
                 st.metric('Unreviewed mental-health keyword candidates',f'{n:,}')
@@ -69,6 +71,7 @@ elif page == 'Award-Level Explorer':
 
 elif page == 'Mental Health Triage':
     st.header('Mental health grant triage — human review required')
+    st.error('⚠️ DEMONSTRATION EXTRACT: Triage results based on 600-row extract only. Counts CANNOT be extrapolated to full dataset.')
     st.warning('All classifications below are automated keyword priorities, NOT verified grant classifications or evidence of investment amounts in mental health.')
     triage_file = ROOT / 'wellcome_mental_health_triage.csv'
     if not triage_file.exists():
@@ -85,6 +88,7 @@ elif page == 'Mental Health Triage':
 
 elif page == 'Classification Validation':
     st.header('Human validation of mental health screening')
+    st.error('⚠️ DEMONSTRATION EXTRACT: Sample drawn from 600-row extract only, NOT from full 26,288-record dataset. Results NOT representative.')
     st.warning('The sample is UNLABELLED. No grant has been manually verified. Do not treat screening flags as confirmed awards.')
     from validation import LABELS, audit_report
     sample_path = ROOT / 'wellcome_validation_sample.csv'

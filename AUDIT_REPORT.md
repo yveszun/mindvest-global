@@ -22,6 +22,41 @@ All critical issues have been resolved:
 
 ---
 
+## ⚠️ CRITICAL DATA LIMITATION
+
+**The deployed application contains a LIMITED, NON-REPRESENTATIVE demonstration extract.**
+
+### Wellcome Dataset Limitation
+- **Deployed dataset**: 600 rows (first 600 rows only)
+- **Full dataset**: 26,288 records (available separately)
+- **Date range in deployed extract**: 2025-01-21 to 2026-08-31
+- **Full dataset date range**: 2000-09-01 to 2026-09-09
+
+### Why This Matters
+This 600-row extract was created solely to make GitHub upload manageable (see `GITHUB_STARTER_NOTE.txt`). It is:
+- ❌ NOT a random sample
+- ❌ NOT stratified or representative
+- ❌ NOT suitable for population inference
+- ❌ NOT suitable for financial estimates
+- ❌ NOT suitable for trend analysis
+- ✅ ONLY suitable for demonstrating app functionality
+
+### Impact on Features
+1. **Mental Health Triage**: Triage counts based on 600 rows cannot be extrapolated
+2. **Validation Sample**: 150-record sample drawn from non-representative 600-row extract
+3. **Award-Level Explorer**: Shows only 600 records, not 26,288
+4. **Date filters and searches**: Limited to 2025-2026 timeframe only
+
+### User Communication
+The app must prominently display:
+- "⚠️ DEMONSTRATION DATASET: 600-row extract only, not representative"
+- Warnings against using counts/totals for research or estimates
+- Link to access full dataset if needed
+
+See `GITHUB_STARTER_NOTE.txt` for details on accessing the complete dataset.
+
+---
+
 ## Issues Identified and Resolved
 
 ### 1. ❌ Data Path Inconsistency (CRITICAL) → ✅ FIXED
@@ -53,11 +88,12 @@ All critical issues have been resolved:
 **Problem:**
 - `plotly>=5.20` - Not imported anywhere
 - `pyarrow>=15` - Only needed for future Parquet catalog (not yet implemented)
+- `behaviorgpt>=0.10` - Only referenced in code example string, not actually imported
 - Increases deployment size and attack surface unnecessarily
 
 **Resolution:**
-- Removed both from `requirements.txt`
-- Kept `behaviorgpt>=0.10` (referenced in documentation)
+- Removed all three from `requirements.txt`
+- Future BehaviorGPT integration documented in `BEHAVIORGPT_PLAN.md`
 - Deployment now minimal and focused
 
 ### 4. ❌ Missing .gitignore (LOW) → ✅ FIXED
@@ -96,14 +132,17 @@ test_wellcome_import.py::test_reject_unknown_schema  PASSED [100%]
 ```
 
 ### Streamlit Smoke Test
-**Status:** ✅ PASSED
+**Status:** ✅ PASSED (Static checks and module loading verified)
 
 Verified:
 - ✅ Python syntax valid
 - ✅ All imports load correctly
-- ✅ All 7 required data files present
-- ✅ No startup errors
-- ✅ App structure intact
+- ✅ All 10 required data files present
+- ✅ Core modules (scoring, triage, validation) function correctly with 600-row demonstration extract
+- ✅ No startup errors in static analysis
+- ⚠️ Full runtime server test not performed (requires deployed environment with network access)
+
+**Note**: Static checks confirm app structure and module loading work correctly. Full end-to-end Streamlit server testing should be performed in deployment environment.
 
 ### Security Audit
 **Status:** ✅ PASSED
@@ -126,30 +165,38 @@ Checked for:
    - Clearly marked as "annual_report" source type
    - ✅ Preserved intact
 
-2. **wellcome_awards_imported.csv** (26,288 records)
-   - Real Wellcome grant records (2000-09-01 to 2026-09-09)
+2. **wellcome_awards_imported.csv** (600 records - DEMONSTRATION EXTRACT ONLY)
+   - ⚠️ **LIMITED 600-ROW EXTRACT** (first 600 rows from original 26,288-record dataset)
+   - Date range: 2025-01-21 to 2026-08-31
+   - **NOT a representative sample**
+   - **MUST NOT be used for population-wide inference or financial estimates**
    - All marked `record_type=awarded_grant`
    - All marked `mental_health_flag=not_reviewed`
    - Source URL: https://wellcome.org/research-funding/funding-portfolio
-   - ✅ Preserved intact
+   - Full dataset available separately (see GITHUB_STARTER_NOTE.txt)
+   - ✅ Extract preserved intact
 
 ### Synthetic Data (DEMO)
-1. **funders.csv** - Marked with `is_demo=true`
-2. **investments.csv** - Demo financing records
-3. **opportunities.csv** - Demo opportunities
-4. **needs.csv** - Demo financing needs
-5. **theme_links.csv** - Demo theme mappings
-6. **evidence.csv** - Demo evidence
+1. **funders.csv** - 4 demo records, marked with `is_demo=true`
+2. **investments.csv** - 10 demo financing records
+3. **opportunities.csv** - 5 demo opportunities
+4. **needs.csv** - 3 demo financing needs
+5. **theme_links.csv** - 13 demo theme mappings
+6. **evidence.csv** - 1 demo evidence record
 
 ### Triage/Validation Outputs
-1. **wellcome_mental_health_triage.csv** - Keyword screening output
+1. **wellcome_mental_health_triage.csv** - 600 records (from 600-row extract only)
+   - Keyword screening output from demonstration extract
    - All records marked `human_review_status=not_reviewed`
    - Categories are NOT verified mental health classifications
+   - **Cannot be extrapolated to full dataset**
    - ✅ Properly labeled
 
-2. **wellcome_validation_sample.csv** - Unlabeled audit sample
-   - 150 records for human review
+2. **wellcome_validation_sample.csv** - 150 records
+   - Unlabeled audit sample for human review
+   - Sampled from 600-row demonstration extract
    - All `adjudicated_label` fields empty
+   - **Not representative of full dataset**
    - ✅ No false classifications
 
 ---
@@ -176,6 +223,8 @@ Checked for:
 - `pandas` v3.1.1
 - `pytest` v9.2.0
 - Python 3.11.15
+
+Note: `behaviorgpt` removed from runtime requirements (not imported by application code; future integration plan in BEHAVIORGPT_PLAN.md)
 
 ---
 

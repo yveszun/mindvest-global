@@ -21,7 +21,7 @@
 ### Dependencies
 - [x] Removed unused `plotly>=5.20` from requirements.txt
 - [x] Removed unused `pyarrow>=15` from requirements.txt (only needed for future Parquet catalog)
-- [x] Kept `behaviorgpt>=0.10` for documentation reference
+- [x] Removed `behaviorgpt>=0.10` from requirements.txt (not imported; future integration documented in BEHAVIORGPT_PLAN.md)
 - [x] Core dependencies: `streamlit>=1.35`, `pandas>=2.0`, `pytest>=8`
 
 ### Testing
@@ -39,7 +39,9 @@
 - [x] Syntax validation passed
 - [x] All imports work correctly
 - [x] All required data files present
-- [x] App structure verified
+- [x] All core modules load successfully with 600-row demonstration extract
+- [x] Scoring, triage, and validation modules function correctly
+- [ ] Full Streamlit server runtime test (requires deployed environment)
 
 ### Security
 - [x] No API keys in code
@@ -60,16 +62,20 @@
 
 ## 📋 Data Files (all in data/)
 
-1. `evidence.csv` - Synthetic evidence data
-2. `funders.csv` - Synthetic funder data (marked with `is_demo=true`)
-3. `investments.csv` - Synthetic investment records
-4. `needs.csv` - Synthetic financing needs
-5. `opportunities.csv` - Synthetic opportunities
-6. `theme_links.csv` - Synthetic theme mappings
-7. `verified_observations.csv` - **REAL** Wellcome aggregate financial data (sourced)
-8. `wellcome_awards_imported.csv` - **REAL** Wellcome grant records (26,288 awards)
-9. `wellcome_mental_health_triage.csv` - Keyword triage output (requires human review)
-10. `wellcome_validation_sample.csv` - Unlabeled audit sample
+**⚠️ CRITICAL DATA LIMITATION**: The Wellcome datasets are **600-row demonstration extracts** (first 600 rows only), NOT representative samples. The deployed app contains a LIMITED, NON-REPRESENTATIVE subset for demonstration purposes only.
+
+1. `evidence.csv` - Synthetic evidence data (1 demo record)
+2. `funders.csv` - Synthetic funder data (4 records, marked with `is_demo=true`)
+3. `investments.csv` - Synthetic investment records (10 records)
+4. `needs.csv` - Synthetic financing needs (3 records)
+5. `opportunities.csv` - Synthetic opportunities (5 records)
+6. `theme_links.csv` - Synthetic theme mappings (13 records)
+7. `verified_observations.csv` - **REAL** Wellcome aggregate financial data (6 records, sourced from annual reports)
+8. `wellcome_awards_imported.csv` - **600-row demonstration extract** (NOT full dataset; date range 2025-01-21 to 2026-08-31)
+9. `wellcome_mental_health_triage.csv` - Triage output from 600-row extract (requires human review)
+10. `wellcome_validation_sample.csv` - Unlabeled audit sample (150 records from extract)
+
+**Full dataset note**: The complete Wellcome dataset (26,288 records, 2000-09-01 to 2026-09-09) is available in the full archive. See `GITHUB_STARTER_NOTE.txt`.
 
 ## ⚠️ Known Issues & Limitations
 
