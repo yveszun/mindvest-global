@@ -35,11 +35,12 @@ elif page == 'Award-Level Explorer':
     upload = st.file_uploader('Upload official Wellcome CSV or Excel award export', type=['csv','xlsx','xls'])
     local = ROOT / 'wellcome_awards_imported.csv'
     try:
+        uploaded_data = False
         if upload is not None:
             import tempfile
             with tempfile.NamedTemporaryFile(suffix=Path(upload.name).suffix,delete=False) as tmp:
                 tmp.write(upload.getvalue()); tmp_path=Path(tmp.name)
-            try: awards=import_awards(tmp_path)
+            try: awards=import_awards(tmp_path); uploaded_data=True
             finally: tmp_path.unlink(missing_ok=True)
         elif local.exists():
             awards=pd.read_csv(local,parse_dates=['award_date'])
@@ -48,8 +49,12 @@ elif page == 'Award-Level Explorer':
         if awards is None:
             st.info('No award-level dataset imported yet. Download the official Wellcome grants spreadsheet from https://wellcome.org/research-funding/funding-portfolio and upload it here, or run the importer.')
         else:
-            st.success(f'{len(awards):,} records loaded from 600-row demonstration extract.')
-            st.error('⚠️ LIMITATION: This is a 600-row extract (first 600 rows only), NOT the full 26,288-record dataset. It is NOT representative and cannot be used for population-wide inference.')
+            if uploaded_data:
+                st.success(f'{len(awards):,} records loaded from uploaded file.')
+                st.info('Uploaded dataset displayed. Verify data provenance and completeness independently.')
+            else:
+                st.success(f'{len(awards):,} records loaded from bundled demonstration data.')
+                st.error('⚠️ LIMITATION: This is a 600-row extract (first 600 rows only), NOT the full 26,288-record dataset. It is NOT representative and cannot be used for population-wide inference.')
             if 'mental_health_flag' in awards.columns:
                 n=int((awards.mental_health_flag=='keyword_candidate_unreviewed').sum())
                 st.metric('Unreviewed mental-health keyword candidates',f'{n:,}')
@@ -101,7 +106,12 @@ elif page == 'Classification Validation':
     if uploaded is not None:
         try:
             reviewed=pd.read_csv(uploaded,keep_default_na=False)
-            if set(reviewed.grant_id)!=set(sample.grant_id) or len(reviewed)!=len(sample):
+            # Validate schema
+            required_cols = ['grant_id', 'triage_category', 'adjudicated_label']
+            missing_cols = [col for col in required_cols if col not in reviewed.columns]
+            if missing_cols:
+                st.error(f'Uploaded file is missing required columns: {", ".join(missing_cols)}')
+            elif set(reviewed.grant_id)!=set(sample.grant_id) or len(reviewed)!=len(sample):
                 st.error('Uploaded IDs must match the full original audit sample exactly.')
             elif not reviewed.adjudicated_label.isin(LABELS+['']).all():
                 st.error('Invalid adjudicated labels; use: '+', '.join(LABELS))
