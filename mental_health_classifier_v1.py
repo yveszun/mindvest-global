@@ -1,18 +1,19 @@
 """
-Mental Health Classification v1 - Rule-Based Classifier
+Mental Health Classification v1.1 - Rule-Based Classifier
 
 Transparent, reproducible classification of Wellcome grants into mental health categories.
 All classifications are automated and require human validation.
 
 Categories:
-- direct: Direct mental health research/programmes
-- integrated: Mental health embedded in broader programmes  
+- direct: Direct mental health research/programmes (primary focus)
+- integrated: Mental health embedded in broader programmes (component of multi-focus)
 - adjacent: Neuroscience, behavioral science, wellbeing (potentially relevant)
 - not_mh: No substantiated mental health relevance
 - uncertain: Insufficient information for confident classification
 
-Version: 1.0
+Version: 1.1
 Date: November 2026
+Changes: Refactored direct vs integrated logic based on primary purpose
 """
 
 import pandas as pd
@@ -22,7 +23,7 @@ from typing import Dict, List, Tuple
 import argparse
 
 # Classification rules version
-CLASSIFIER_VERSION = "v1.0"
+CLASSIFIER_VERSION = "v1.1"
 
 #===============================================================================
 # RULE DEFINITIONS
@@ -144,99 +145,147 @@ def check_pattern_pair(text: str, pattern1: str, pattern2: str) -> bool:
     return bool(re.search(pattern1, text, re.IGNORECASE) and 
                 re.search(pattern2, text, re.IGNORECASE))
 
+def has_broader_programme_focus(title: str, description: str) -> Tuple[bool, str]:
+    """
+    Determine if grant has a broader programme focus (not primarily mental health).
+    
+    A broader programme must be the PRIMARY focus of the grant, evidenced by title.
+    
+    Returns:
+        (has_broader_focus, programme_type)
+    """
+    title_lower = normalize_text(title)
+    desc_lower = normalize_text(description)
+    
+    # Check title for MH as primary focus indicator
+    # If title says "mental health X" or "X mental health", it's primary focus
+    if re.search(r'\bmental\s+health\s+(service|programme|care|intervention|treatment|system)', title_lower):
+        return False, None  # Mental health services in title = not broader programme
+    if re.search(r'(service|programme|care|intervention|treatment)\s+.*mental\s+health', title_lower):
+        return False, None
+    
+    # Broader programme indicators in TITLE (primary focus indicators)
+    # These must be substantive programmes, not just mentions
+    title_programme_patterns = [
+        # HIV/AIDS programmes (allow looser matching)
+        (r'\b(hiv|aids)\b.*\b(treatment|care|programme|intervention|services?|cohort|study)\b', 'HIV/AIDS'),
+        (r'\b(study|cohort|intervention)\b.*\b(hiv|aids)\b', 'HIV/AIDS'),
+        # Maternal/perinatal health
+        (r'\b(maternal|perinatal|antenatal|postnatal|postpartum)\s+(health|care|services?|outcomes?)\b', 'Maternal health'),
+        # Primary care
+        (r'\bprimary\s+care\s+(programme|services?|delivery|integration)\b', 'Primary care'),
+        # Community health
+        (r'\bcommunity\s+health\s+(programme|worker|services?|intervention)\b', 'Community health'),
+        # Humanitarian
+        (r'\bhumanitarian\s+(response|intervention|aid|programme)\b', 'Humanitarian'),
+        # NCD
+        (r'\bncd\b|\bnon[-\s]?communicable\s+disease', 'NCD'),
+    ]
+    
+    for pattern, prog_type in title_programme_patterns:
+        if re.search(pattern, title_lower):
+            return True, prog_type
+    
+    return False, None
+
 def classify_grant(title: str, description: str) -> Tuple[str, float, str]:
     """
     Classify a single grant into mental health category.
     
+    Classification logic:
+    1. Determine if grant has broader programme focus (integrated candidate)
+    2. Check for mental health components
+    3. Distinguish direct vs integrated based on primary purpose
+    4. Use uncertain when purpose cannot be reliably determined
+    
     Returns:
         category: direct, integrated, adjacent, not_mh, uncertain
-        confidence: 0-1 confidence score
-        evidence: Comma-separated matched patterns/terms
+        confidence: 0-1 heuristic score (NOT calibrated probability)
+        evidence: Matched patterns/reasoning
     """
     title_norm = normalize_text(title)
     desc_norm = normalize_text(description)
     combined = f"{title_norm} {desc_norm}"
     
-    # Track all matches for evidence
-    all_matches = []
+    # Check for broader programme focus first
+    has_broader_focus, prog_type = has_broader_programme_focus(title, description)
     
-    # Priority 1: Direct Mental Health
+    # Check for MH components
     direct_strong_matches = find_matches(combined, DIRECT_MH_STRONG)
     direct_medium_matches = find_matches(combined, DIRECT_MH_MEDIUM)
+    title_direct_matches = find_matches(title_norm, DIRECT_MH_STRONG)
     
-    if direct_strong_matches:
-        # Strong match in title or description
-        title_matches = find_matches(title_norm, DIRECT_MH_STRONG)
-        if title_matches:
-            confidence = 0.95  # High confidence for title match
-        else:
-            confidence = 0.85  # High confidence for description match
-        
-        evidence = "; ".join(direct_strong_matches[:3])  # Top 3 matches
-        return "direct", confidence, f"Direct MH: {evidence}"
+    # CASE 1: Title explicitly states mental health focus
+    # -> Direct MH (even if broader programme mentioned)
+    if title_direct_matches:
+        # Title says "mental health" - this is primary focus
+        confidence = 0.90
+        evidence = "; ".join(title_direct_matches[:2])
+        return "direct", confidence, f"Direct MH (title focus): {evidence}"
     
-    elif len(direct_medium_matches) >= 2:
-        # Multiple medium signals
+    # CASE 2: Has broader programme AND MH component in description
+    # -> Integrated (MH embedded in broader programme)
+    if has_broader_focus and direct_strong_matches:
+        # Broader programme with MH component mentioned in description
         confidence = 0.75
-        evidence = "; ".join(direct_medium_matches[:2])
+        mh_terms = "; ".join(direct_strong_matches[:2])
+        return "integrated", confidence, f"Integrated ({prog_type} + MH): {mh_terms}"
+    
+    # CASE 3: Strong MH indicators but no broader programme
+    # -> Direct MH (standalone mental health research/programme)
+    if direct_strong_matches:
+        confidence = 0.85
+        evidence = "; ".join(direct_strong_matches[:2])
         return "direct", confidence, f"Direct MH: {evidence}"
     
-    # Priority 2: Integrated Mental Health
-    # Integrated requires: broader programme indicator AND mental health component
-    # BUT not if already has strong direct MH signals
-    for pattern1, pattern2 in INTEGRATED_MH_PATTERNS:
-        if check_pattern_pair(combined, pattern1, pattern2):
-            # Don't classify as integrated if title has strong direct MH terms
-            title_has_direct_mh = find_matches(title_norm, DIRECT_MH_STRONG)
-            if title_has_direct_mh:
-                # This is direct MH, not integrated
-                confidence = 0.90
-                evidence = "; ".join(title_has_direct_mh[:2])
-                return "direct", confidence, f"Direct MH (title): {evidence}"
-            
-            # True integrated: MH component within broader program
-            confidence = 0.80 if check_pattern_pair(title_norm, pattern1, pattern2) else 0.70
-            evidence = f"Broader program + MH component"
-            return "integrated", confidence, f"Integrated MH: {evidence}"
+    # CASE 4: Multiple medium MH signals
+    # -> Could be direct or uncertain depending on context
+    if len(direct_medium_matches) >= 2:
+        # Check if sufficient context
+        if len(combined) > 100:
+            confidence = 0.70
+            evidence = "; ".join(direct_medium_matches[:2])
+            return "direct", confidence, f"Direct MH (medium confidence): {evidence}"
+        else:
+            # Insufficient context - uncertain
+            confidence = 0.50
+            return "uncertain", confidence, "Multiple weak MH signals, insufficient context"
     
-    # Check if has medium mental health signal but not strong enough for direct
-    if direct_medium_matches and len(direct_medium_matches) == 1:
-        # Single weak signal - could be integrated or uncertain
-        confidence = 0.60
+    # CASE 5: Single medium MH signal
+    # -> Usually uncertain (could be incidental mention)
+    if direct_medium_matches:
+        confidence = 0.55
         evidence = direct_medium_matches[0]
         return "uncertain", confidence, f"Weak MH signal: {evidence}"
     
-    # Priority 3: Adjacent/Enabling
+    # CASE 6: Neuroscience/behavioral without MH context
+    # -> Adjacent
     neuro_matches = find_matches(combined, ADJACENT_NEUROSCIENCE)
     behavioral_matches = find_matches(combined, ADJACENT_BEHAVIORAL)
     
-    # Ensure no mental health context with neuroscience/behavioral
-    has_mh_context = find_matches(combined, DIRECT_MH_STRONG + DIRECT_MH_MEDIUM)
-    
-    if (neuro_matches or behavioral_matches) and not has_mh_context:
-        confidence = 0.75 if (neuro_matches and behavioral_matches) else 0.70
+    if neuro_matches or behavioral_matches:
+        confidence = 0.70
         evidence = "; ".join((neuro_matches + behavioral_matches)[:2])
-        return "adjacent", confidence, f"Adjacent: {evidence}"
+        return "adjacent", confidence, f"Adjacent (neuroscience/behavioral): {evidence}"
     
-    # Priority 4: Not Mental Health
-    # If reached here and has strong non-MH indicators
+    # CASE 7: Strong non-MH indicators
+    # -> Not MH
     not_mh_matches = find_matches(combined, NOT_MH_STRONG)
     if not_mh_matches:
-        confidence = 0.80
+        confidence = 0.75
         evidence = not_mh_matches[0]
         return "not_mh", confidence, f"Not MH: {evidence}"
     
-    # Priority 5: Uncertain/Not Mental Health Default
-    # If no strong signals for any category, likely not mental health
-    # but classify as uncertain for short titles/descriptions
-    text_length = len(title_norm) + len(desc_norm)
+    # CASE 8: Default - no clear signals
+    # -> Not MH (with lower confidence) or uncertain for very short text
+    text_length = len(combined)
     
-    if text_length < 50:  # Very short text
+    if text_length < 50:
         return "uncertain", 0.40, "Insufficient detail"
-    elif text_length < 150:  # Short text
-        return "not_mh", 0.65, "No MH indicators, limited text"
-    else:  # Adequate text, no MH signals
-        return "not_mh", 0.75, "No MH indicators"
+    elif text_length < 150:
+        return "not_mh", 0.60, "No MH indicators, limited text"
+    else:
+        return "not_mh", 0.70, "No MH indicators"
 
 def classify_population(input_path: str, output_path: str = None, version: str = CLASSIFIER_VERSION) -> pd.DataFrame:
     """

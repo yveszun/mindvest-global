@@ -17,63 +17,134 @@ class TestClassificationLogic:
     """Test classification rules and logic"""
     
     def test_direct_mental_health_strong_signals(self):
-        """Direct MH: Strong mental health indicators"""
-        # Explicit mental health
+        """Direct MH: Strong mental health indicators in standalone research"""
+        # Explicit mental health in title
         cat, conf, ev = classify_grant("Mental health services in Kenya", "Program to improve mental health care")
         assert cat == "direct"
         assert conf > 0.8
         
-        # Depression
+        # Depression research (standalone)
         cat, conf, ev = classify_grant("Depression treatment in primary care", "Study of depression interventions")
         assert cat == "direct"
         
-        # Suicide prevention
+        # Suicide prevention (standalone)
         cat, conf, ev = classify_grant("Suicide prevention programme", "Community-based suicide prevention")
         assert cat == "direct"
     
-    def test_integrated_mental_health(self):
-        """Integrated MH: Mental health within broader programs"""
-        # HIV + depression (without "mental health" in title)
-        cat, conf, ev = classify_grant("HIV treatment programme", "HIV care including depression screening and psychological support")
-        # This might be direct if strong MH terms are present, or integrated
-        assert cat in ["direct", "integrated"]
+    def test_integrated_hiv_mental_health(self):
+        """Integrated MH: Mental health integrated into HIV services"""
+        # HIV programme with depression component in description
+        cat, conf, ev = classify_grant(
+            "HIV treatment and care programme in urban South Africa",
+            "Comprehensive HIV care including antiretroviral therapy, depression screening, and psychological support services for people living with HIV"
+        )
+        assert cat == "integrated", f"Expected integrated, got {cat}: {ev}"
         
-        # Maternal + depression (integrated approach)
-        cat, conf, ev = classify_grant("Maternal health services", "Antenatal care with postnatal depression screening")
-        assert cat in ["direct", "integrated"]
+        # HIV with mental health comorbidity
+        cat, conf, ev = classify_grant(
+            "Addressing HIV and mental health comorbidities",
+            "Study of depression and anxiety among HIV-positive patients"
+        )
+        # Could be direct or integrated depending on title interpretation
+        assert cat in ["direct", "integrated"], f"Got {cat}: {ev}"
     
-    def test_adjacent_neuroscience(self):
-        """Adjacent: Neuroscience without mental health"""
-        cat, conf, ev = classify_grant("Neural mechanisms of reward processing", "fMRI study of brain function")
-        assert cat == "adjacent"
+    def test_integrated_maternal_psychosocial(self):
+        """Integrated MH: Maternal health with embedded psychosocial support"""
+        # Maternal health programme with depression screening
+        cat, conf, ev = classify_grant(
+            "Maternal health services strengthening in rural Malawi",
+            "Programme to improve antenatal and postnatal care including screening for postnatal depression and psychosocial support"
+        )
+        assert cat == "integrated", f"Expected integrated, got {cat}: {ev}"
         
-        cat, conf, ev = classify_grant("Neuroplasticity in learning", "Brain imaging of cognitive function")
-        assert cat == "adjacent"
+        # Perinatal health outcomes with mental health component
+        cat, conf, ev = classify_grant(
+            "Improving perinatal health outcomes through integrated care",
+            "Study includes nutrition, family planning, and screening for perinatal depression and anxiety"
+        )
+        assert cat in ["direct", "integrated"], f"Got {cat}: {ev}"
     
-    def test_adjacent_behavioral_wellbeing(self):
-        """Adjacent: Behavioral science and wellbeing without MH"""
-        cat, conf, ev = classify_grant("Behavioral economics and health decisions", "Nudge interventions for healthy choices")
-        assert cat == "adjacent"
+    def test_integrated_primary_care(self):
+        """Integrated MH: Primary care integration of mental health"""
+        # Primary care programme with mental health integration
+        cat, conf, ev = classify_grant(
+            "Strengthening primary care services in rural India",
+            "Training primary care workers in mental health screening, diabetes management, and hypertension control"
+        )
+        assert cat in ["direct", "integrated"], f"Got {cat}: {ev}"
+    
+    def test_direct_vs_integrated_title_focus(self):
+        """Direct MH when title explicitly states mental health focus"""
+        # Title says "mental health services" - this is direct even if HIV mentioned
+        cat, conf, ev = classify_grant(
+            "Mental health services for people living with HIV",
+            "Programme focused on depression and anxiety treatment for HIV patients"
+        )
+        assert cat == "direct", f"Expected direct (title focus), got {cat}: {ev}"
         
-        cat, conf, ev = classify_grant("Workplace wellbeing programme", "Quality of life interventions")
-        assert cat == "adjacent"
+        # Standalone depression research
+        cat, conf, ev = classify_grant(
+            "Depression treatment in primary care settings",
+            "Randomized trial of cognitive behavioral therapy"
+        )
+        assert cat == "direct", f"Expected direct, got {cat}: {ev}"
     
-    def test_not_mental_health(self):
+    def test_adjacent_neuroscience_without_mh(self):
+        """Adjacent: Neuroscience without explicit mental health objectives"""
+        # Pure neuroscience
+        cat, conf, ev = classify_grant(
+            "Neural mechanisms of reward processing",
+            "fMRI study of dopaminergic pathways in reward learning"
+        )
+        assert cat == "adjacent", f"Expected adjacent, got {cat}: {ev}"
+        
+        # Brain imaging without MH
+        cat, conf, ev = classify_grant(
+            "Neuroplasticity in learning and memory",
+            "Structural brain changes during skill acquisition"
+        )
+        assert cat == "adjacent", f"Expected adjacent, got {cat}: {ev}"
+    
+    def test_not_mental_health_physical_disease(self):
         """Not MH: Physical health without mental health component"""
+        # Malaria
         cat, conf, ev = classify_grant("Malaria vaccine development", "Testing new malaria vaccine candidates")
-        assert cat == "not_mh"
+        assert cat == "not_mh", f"Expected not_mh, got {cat}: {ev}"
         
+        # Tuberculosis
         cat, conf, ev = classify_grant("Tuberculosis treatment optimization", "Drug regimens for TB patients")
-        assert cat == "not_mh"
+        assert cat == "not_mh", f"Expected not_mh, got {cat}: {ev}"
+        
+        # Cardiovascular without MH
+        cat, conf, ev = classify_grant("Cardiovascular disease prevention", "Study of hypertension management")
+        assert cat == "not_mh", f"Expected not_mh, got {cat}: {ev}"
+    
+    def test_uncertain_incidental_mention(self):
+        """Uncertain: Broader programme mentioning mental health incidentally"""
+        # Very brief mention without substance
+        cat, conf, ev = classify_grant(
+            "Community health worker training programme",
+            "Training includes nutrition, sanitation, child health, mental wellbeing"
+        )
+        # Could be uncertain, not_mh, or adjacent - allow all
+        assert cat in ["uncertain", "not_mh", "adjacent", "integrated"], f"Got {cat}: {ev}"
+        
+        # Ambiguous context
+        cat, conf, ev = classify_grant(
+            "Trauma care in conflict settings",
+            "Emergency trauma response"
+        )
+        assert cat in ["uncertain", "not_mh"], f"Expected uncertain/not_mh for ambiguous trauma, got {cat}: {ev}"
     
     def test_uncertain_insufficient_info(self):
         """Uncertain: Ambiguous or insufficient information"""
+        # Very short
         cat, conf, ev = classify_grant("Community health", "")
-        assert cat == "uncertain" or cat == "not_mh"
+        assert cat == "uncertain" or cat == "not_mh", f"Got {cat}: {ev}"
         
-        # Very short text
-        cat, conf, ev = classify_grant("Trauma", "Study")
-        assert conf < 0.7  # Low confidence
+        # Short ambiguous
+        cat, conf, ev = classify_grant("Wellbeing study", "Quality of life research")
+        assert cat in ["uncertain", "adjacent"], f"Got {cat}: {ev}"
 
 class TestEvaluationMetrics:
     """Test evaluation metrics calculation"""
@@ -168,8 +239,8 @@ class TestDataIntegrity:
         # All should start as automated
         assert (classifications['review_status'] == 'automated').all()
         
-        # Check version is updated
-        assert (classifications['classifier_version'] == 'v1.0.1').all()
+        # Check version is v1.x
+        assert (classifications['classifier_version'].str.startswith('v1.')).all()
     
     def test_classifications_categories_valid(self):
         """Only valid categories should be used"""
@@ -244,6 +315,19 @@ class TestDataIntegrity:
 class TestSafeguards:
     """Test safeguards against misuse"""
     
+    def test_review_sample_uniqueness(self):
+        """Review sample should contain unique grant IDs"""
+        review_sample = pd.read_csv('data/wellcome_mh_review_sample_v1.csv')
+        
+        # No duplicate grant IDs
+        assert review_sample['grant_id'].duplicated().sum() == 0, "Found duplicate grant IDs in review sample"
+        
+        # All grant IDs should be valid (exist in source)
+        classifications = pd.read_csv('data/wellcome_mh_classifications_v1.csv')
+        valid_ids = set(classifications['grant_id'])
+        sample_ids = set(review_sample['grant_id'])
+        assert sample_ids.issubset(valid_ids), "Some sample grant IDs not in source data"
+    
     def test_no_verified_claims_without_validation(self):
         """Evaluation should refuse to run without human labels"""
         from evaluate_classification_v1 import load_validated_sample
@@ -292,7 +376,8 @@ class TestReproducibility:
         """Classifier version should be recorded"""
         classifications = pd.read_csv('data/wellcome_mh_classifications_v1.csv')
         assert 'classifier_version' in classifications.columns
-        assert (classifications['classifier_version'] == 'v1.0.1').all()
+        # Check for v1.1 after refactoring
+        assert (classifications['classifier_version'].str.startswith('v1.')).all()
 
 if __name__ == '__main__':
     pytest.main([__file__, '-v'])

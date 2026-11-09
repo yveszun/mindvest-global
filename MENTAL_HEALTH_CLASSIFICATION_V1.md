@@ -181,11 +181,24 @@ This document defines a transparent, reproducible classification system for iden
 
 ## Confidence Scoring
 
-Confidence levels assigned based on:
+**IMPORTANT: Confidence scores are heuristic rule-based scores, NOT calibrated probabilities.**
 
-- **High (0.8-1.0):** Clear category indicators, unambiguous language, strong evidence
-- **Medium (0.5-0.79):** Mixed signals, moderate evidence, some ambiguity
-- **Low (<0.5):** Weak signals, high ambiguity, requires review
+Confidence values (0-1) assigned based on:
+
+- **High (0.8-1.0):** Clear category indicators, title-level signals, strong unambiguous evidence
+- **Medium (0.6-0.79):** Description-level signals, moderate evidence, some ambiguity
+- **Low (<0.6):** Weak signals, high ambiguity, insufficient context, requires review
+
+**What confidence scores ARE:**
+- Relative indicators of classification certainty
+- Heuristic scores based on rule strength and signal location (title vs description)
+- Useful for prioritizing human review (low confidence = review first)
+
+**What confidence scores are NOT:**
+- Calibrated probabilities (not P(correct | features))
+- Directly comparable across categories
+- Validated against ground truth
+- Suitable for statistical inference without calibration
 
 Confidence ≠ verification. Even high-confidence automated classifications require human validation.
 
@@ -207,37 +220,58 @@ For each classification, record:
 
 The sampling strategy deliberately **oversamples rare categories** (integrated, uncertain) and **undersamples common categories** (not_mh) to ensure adequate evaluation coverage across all categories.
 
-**Implications:**
-- Sample category distribution ≠ population category distribution
-- Unweighted sample metrics cannot be extrapolated to population estimates
-- To estimate population-level performance, apply inverse probability weights
-- Sampling metadata includes population sizes, sample sizes, and sampling probabilities for each stratum
+**Sampling Design:**
 
-Generate stratified sample of 200-300 grants:
+Generate stratified sample of 200-300 grants using **overlapping strata**:
 
-**Strata:**
+**Category strata (5):**
 1. **Direct MH (automated):** ~40 grants
-2. **Integrated MH (automated):** ~40 grants (oversampled - rare category)
+2. **Integrated MH (automated):** All available (rare category, typically <10)
 3. **Adjacent/Enabling (automated):** ~40 grants
-4. **Not MH (automated):** ~40 grants (undersampled - common category)
+4. **Not MH (automated):** ~40 grants
 5. **Uncertain (automated):** ~40 grants (oversampled - requires review)
-6. **Keyword-negative (baseline):** ~60 grants randomly sampled from non-candidates
+
+**Control stratum (1):**
+6. **Keyword-negative (baseline):** ~60-80 grants from non-keyword-candidates
+
+**IMPORTANT: Strata overlap by design.** 
+- A grant classified as `not_mh` can also be in `keyword_negative` stratum
+- Final sample contains unique grants (no duplicates)
+- Some keyword-negative grants will be `not_mh`, some will be other categories
+- This is intentional: keyword-negative serves as baseline control, not mutually exclusive stratum
+
+**Valid inclusion probabilities:**
+Each unique grant has ONE inclusion probability based on its primary stratum:
+- If sampled from category stratum: p = n_category_sample / n_category_population
+- Category assignment takes precedence over keyword status
+- Keyword-negative control adds additional non-keyword grants to ensure baseline coverage
+
+**Why overlapping design:**
+- Validates whether classifier can identify true negatives (keyword-negative controls)
+- Tests if non-keyword grants are correctly classified as not_mh
+- Ensures diverse sample includes grants that passed and failed keyword screening
+
+**Weighting for population estimates:**
+Use stratum assignment (not keyword status) for weights:
+```
+weight[grant] = (population_proportion[stratum]) / (sample_proportion[stratum])
+```
+
+Where stratum = {direct, integrated, adjacent, not_mh, uncertain} based on automated classification.
 
 **Sampling method:**
-- Stratified sampling with fixed sample sizes per stratum
+- Stratified sampling with target sample sizes per stratum
 - Random sampling within each stratum
 - Confidence-based diversity sampling (mix of high/medium/low confidence)
 - Fixed seed (42) for reproducibility
-- Sampling metadata saved with population sizes and probabilities
+- Final sample deduplicated to ensure uniqueness
+- Sampling metadata saved with population sizes and probabilities per stratum
 
-**Weighting for population estimates:**
-```
-weight[stratum] = (population_proportion[stratum]) / (sample_proportion[stratum])
-```
-
-Where:
-- population_proportion = stratum_size / total_population
-- sample_proportion = stratum_sample_size / total_sample_size
+**Implications:**
+- Sample category distribution ≠ population category distribution
+- Unweighted sample metrics cannot be extrapolated to population estimates
+- Use category-stratum weights (not keyword weights) for population estimates
+- Overlapping design is valid and documented
 
 ### Review CSV Format
 
@@ -396,6 +430,18 @@ PYTHONPATH=./lib python generate_review_sample_v1.py \
 ```
 
 ### Changelog
+
+### v1.1 (November 2026 - Final Targeted Corrections)
+- **Refactored:** Direct vs integrated logic based on primary purpose, not just keyword presence
+- **Fixed:** Integrated detection now evaluates broader programme focus before MH component
+- **Fixed:** Title-level MH signals indicate direct focus (take precedence)
+- **Fixed:** HIV+MH, maternal+MH, primary care+MH can now be correctly classified as integrated
+- **Clarified:** Confidence scores are heuristic (NOT calibrated probabilities)
+- **Added:** `has_broader_programme_focus()` to detect programme type
+- **Added:** Comprehensive regression tests (HIV, maternal, direct, integrated, adjacent, uncertain)
+- **Added:** Review sample uniqueness test
+- **Improved:** Use `uncertain` when purpose cannot be reliably determined (rather than forcing category)
+- **Version:** v1.1 (classifier, data, and documentation consistent)
 
 ### v1.0.1 (November 2026 - Methodological Corrections)
 - **Fixed:** Uncertain predictions now treated as abstentions, not negatives
