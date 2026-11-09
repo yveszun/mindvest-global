@@ -44,7 +44,7 @@ else:
     st.warning('⚠️ NO BUNDLED WELLCOME DATA: Award-Level Explorer requires dataset. Upload official Wellcome grants spreadsheet or run import pipeline.')
 
 st.warning('SYNTHETIC: Funder Discovery, Behavioral Intelligence, Capital Gaps and Prospect Dossier use fictional data. No BehaviorGPT calls are made.')
-page = st.sidebar.radio('Explore', ['Verified Evidence', 'Award-Level Explorer', 'Mental Health Triage', 'Classification Validation', 'Overview', 'Funder Discovery', 'Behavioral Intelligence', 'Capital Gaps', 'Prospect Dossier', 'BehaviorGPT Readiness'])
+page = st.sidebar.radio('Explore', ['Verified Evidence', 'Award-Level Explorer', 'Mental Health Triage', 'Mental Health Classification v1', 'Classification Validation', 'Overview', 'Funder Discovery', 'Behavioral Intelligence', 'Capital Gaps', 'Prospect Dossier', 'BehaviorGPT Readiness'])
 
 if page == 'Verified Evidence':
     st.header('Verified public financing evidence')
@@ -180,6 +180,335 @@ elif page == 'Mental Health Triage':
         st.dataframe(q[['grant_id','title','recipient','award_date','triage_reason','source_url']].head(200), hide_index=True, use_container_width=True)
         st.download_button('Download review queue', q.to_csv(index=False), 'wellcome_review_queue.csv')
         st.caption('No funding totals are calculated from unreviewed categories. A manual audit is needed before interpreting thematic or geographic trends.')
+
+elif page == 'Mental Health Classification v1':
+    st.header('Mental Health Classification v1')
+    st.caption('Rule-based classification system for identifying mental health-related grants')
+    
+    # Load classifications if available
+    classifications_file = ROOT / 'wellcome_mh_classifications_v1.csv'
+    review_sample_file = ROOT / 'wellcome_mh_review_sample_v1.csv'
+    
+    # Check if classification has been run
+    if not classifications_file.exists():
+        st.error('⚠️ CLASSIFICATIONS NOT YET GENERATED')
+        st.info('Run the classification pipeline: PYTHONPATH=./lib python mental_health_classifier_v1.py')
+        st.markdown('See MENTAL_HEALTH_CLASSIFICATION_V1.md for methodology documentation.')
+    else:
+        classifications = pd.read_csv(classifications_file, parse_dates=['award_date'])
+        
+        st.success(f'✓ {len(classifications):,} grants classified using Mental Health Classification v1')
+        st.warning('⚠️ ALL CLASSIFICATIONS ARE AUTOMATED AND UNREVIEWED - Human validation required before any funding calculations or policy claims')
+        
+        # Overview metrics
+        st.subheader('Classification Overview')
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric('Total Grants', f'{len(classifications):,}')
+        with col2:
+            direct_integrated = classifications[classifications['mh_category_v1'].isin(['direct', 'integrated'])].shape[0]
+            st.metric('Direct + Integrated MH', f'{direct_integrated:,}')
+        with col3:
+            uncertain = classifications[classifications['mh_category_v1'] == 'uncertain'].shape[0]
+            st.metric('Uncertain (needs review)', f'{uncertain:,}')
+        
+        # Category distribution
+        st.subheader('Category Distribution')
+        category_counts = classifications['mh_category_v1'].value_counts().sort_index()
+        st.bar_chart(category_counts)
+        
+        st.dataframe(
+            pd.DataFrame({
+                'Category': category_counts.index,
+                'Count': category_counts.values,
+                'Percentage': (category_counts.values / len(classifications) * 100).round(2)
+            }),
+            hide_index=True,
+            use_container_width=True
+        )
+        
+        # Category definitions
+        with st.expander('📖 Category Definitions'):
+            st.markdown('''
+            **Direct Mental Health:** Research or programmes explicitly addressing mental health conditions, services, prevention, treatment, or psychosocial support.
+            
+            **Integrated Mental Health:** Mental health components embedded within broader health, social, or humanitarian programmes (HIV, maternal health, primary care, etc.).
+            
+            **Adjacent/Enabling:** Neuroscience, behavioral science, wellbeing research potentially relevant to mental health but without demonstrated direct or integrated mental health objectives. NOT verified mental health investment.
+            
+            **Not Mental Health:** No substantiated mental health relevance.
+            
+            **Uncertain:** Insufficient information or conflicting evidence for confident classification.
+            
+            See MENTAL_HEALTH_CLASSIFICATION_V1.md for complete methodology.
+            ''')
+        
+        # Browse classified grants
+        st.subheader('Browse Classified Grants')
+        selected_category = st.selectbox(
+            'Filter by category',
+            ['All'] + sorted(classifications['mh_category_v1'].unique())
+        )
+        
+        if selected_category == 'All':
+            display_df = classifications
+        else:
+            display_df = classifications[classifications['mh_category_v1'] == selected_category]
+        
+        st.metric('Grants in view', f'{len(display_df):,}')
+        
+        st.dataframe(
+            display_df[['grant_id', 'title', 'mh_category_v1', 'mh_confidence_v1', 'mh_evidence_v1', 'amount_gbp', 'award_date']].head(200),
+            hide_index=True,
+            use_container_width=True
+        )
+        
+        st.download_button(
+            'Download all classifications',
+            classifications.to_csv(index=False),
+            'wellcome_mh_classifications_v1.csv',
+            mime='text/csv'
+        )
+        
+        # Human validation sample
+        st.subheader('Human Validation')
+        
+        if not review_sample_file.exists():
+            st.info('📋 Generate a human review sample: PYTHONPATH=./lib python generate_review_sample_v1.py')
+        else:
+            review_sample = pd.read_csv(review_sample_file)
+            has_validation = review_sample['human_category'].notna().any() and (review_sample['human_category'] != '').any()
+            
+            st.metric('Review Sample Size', f'{len(review_sample)} grants')
+            
+            if not has_validation:
+                st.warning('⚠️ REVIEW SAMPLE NOT YET COMPLETED - Download, review, and upload completed sample')
+                st.download_button(
+                    'Download Review Sample for Human Validation',
+                    review_sample.to_csv(index=False),
+                    'wellcome_mh_review_sample_v1.csv',
+                    mime='text/csv'
+                )
+                
+                st.markdown('''
+                **Instructions for reviewers:**
+                1. Fill in `human_category` column: direct, integrated, adjacent, not_mh, or uncertain
+                2. Fill in `reviewer_confidence`: high, medium, or low
+                3. Add notes in `reviewer_notes` for borderline/uncertain cases
+                4. Enter your ID in `reviewer_id` and date in `review_date`
+                5. Upload completed CSV below
+                
+                Do not fabricate reviews. Each grant requires genuine expert judgment.
+                ''')
+                
+                # Upload completed review
+                uploaded_review = st.file_uploader('Upload completed review sample', type=['csv'], key='mh_review_upload')
+                
+                if uploaded_review is not None:
+                    try:
+                        reviewed = pd.read_csv(uploaded_review)
+                        
+                        # Comprehensive validation
+                        validation_errors = []
+                        
+                        # Required columns
+                        required_cols = ['grant_id', 'automated_category', 'human_category']
+                        missing_cols = [col for col in required_cols if col not in reviewed.columns]
+                        if missing_cols:
+                            validation_errors.append(f"Missing required columns: {', '.join(missing_cols)}")
+                        
+                        if not validation_errors:
+                            # Check for actual human labels
+                            has_labels = reviewed['human_category'].notna().any() and (reviewed['human_category'] != '').any()
+                            if not has_labels:
+                                validation_errors.append("No human_category values filled in")
+                            
+                            # Validate category values
+                            valid_categories = {'direct', 'integrated', 'adjacent', 'not_mh', 'uncertain'}
+                            filled_human = reviewed[reviewed['human_category'].notna() & (reviewed['human_category'] != '')]
+                            if len(filled_human) > 0:
+                                invalid_human = set(filled_human['human_category'].unique()) - valid_categories
+                                if invalid_human:
+                                    validation_errors.append(f"Invalid human_category values: {invalid_human}")
+                            
+                            # Check grant IDs match original sample
+                            original_sample = pd.read_csv(review_sample_file)
+                            if not set(reviewed['grant_id']).issubset(set(original_sample['grant_id'])):
+                                validation_errors.append("Some grant_ids not in original review sample")
+                            
+                            # Check for duplicate grant IDs
+                            if reviewed['grant_id'].duplicated().any():
+                                n_dupes = reviewed['grant_id'].duplicated().sum()
+                                validation_errors.append(f"{n_dupes} duplicate grant_id values found")
+                            
+                            # Validate automated predictions haven't changed
+                            merged = reviewed.merge(original_sample[['grant_id', 'automated_category']], 
+                                                   on='grant_id', suffixes=('_uploaded', '_original'))
+                            if 'automated_category_original' in merged.columns:
+                                mismatches = merged[merged['automated_category_uploaded'] != merged['automated_category_original']]
+                                if len(mismatches) > 0:
+                                    validation_errors.append(f"{len(mismatches)} grants have automated_category changed from original")
+                        
+                        if validation_errors:
+                            st.error("❌ VALIDATION FAILED")
+                            for error in validation_errors:
+                                st.error(f"  • {error}")
+                            st.info("Fix errors and re-upload. Do not modify grant_id or automated_category columns.")
+                        else:
+                            # Validation passed - display metrics
+                            n_validated = filled_human.shape[0]
+                            st.success(f'✓ Validation passed: {n_validated} grants reviewed')
+                            
+                            # Compute and display evaluation metrics
+                            from evaluate_classification_v1 import compute_binary_metrics, compute_multiclass_metrics, confusion_matrix
+                            
+                            y_true = filled_human['human_category']
+                            y_pred = filled_human['automated_category']
+                            
+                            st.subheader('Evaluation Results')
+                            st.caption(f'Based on {n_validated} human-validated grants')
+                            
+                            # Binary metrics
+                            st.markdown('**Binary Classification (MH Relevant vs Not)**')
+                            binary_metrics = compute_binary_metrics(y_true, y_pred)
+                            
+                            if 'error' not in binary_metrics:
+                                # Abstention metrics
+                                col1, col2, col3 = st.columns(3)
+                                with col1:
+                                    st.metric('Abstention Rate', f"{binary_metrics['abstention_rate']:.2%}")
+                                with col2:
+                                    st.metric('Classification Coverage', f"{binary_metrics['classification_coverage']:.2%}")
+                                with col3:
+                                    st.metric('Predicted Uncertain', binary_metrics['n_predicted_uncertain'])
+                                
+                                st.caption('Abstention rate = fraction of predictions classified as "uncertain". Coverage = 1 - abstention rate.')
+                                
+                                # Performance metrics
+                                st.markdown('**Performance on Classified Samples**')
+                                col1, col2, col3, col4 = st.columns(4)
+                                with col1:
+                                    st.metric('Precision', f"{binary_metrics['precision']:.3f}")
+                                with col2:
+                                    st.metric('Recall', f"{binary_metrics['recall']:.3f}")
+                                with col3:
+                                    st.metric('F1 Score', f"{binary_metrics['f1_score']:.3f}")
+                                with col4:
+                                    st.metric('Accuracy', f"{binary_metrics['accuracy']:.3f}")
+                                
+                                st.caption(f"Metrics computed on {binary_metrics['n_samples']} classified samples (excluding uncertain predictions)")
+                            
+                            # Multi-class metrics
+                            st.markdown('**Multi-Class Performance**')
+                            multiclass_metrics = compute_multiclass_metrics(y_true, y_pred)
+                            st.metric('Overall Accuracy', f"{multiclass_metrics['overall_accuracy']:.3f}")
+                            
+                            # Per-category metrics
+                            category_metrics_df = pd.DataFrame([
+                                {
+                                    'Category': cat,
+                                    'Precision': f"{metrics['precision']:.3f}",
+                                    'Recall': f"{metrics['recall']:.3f}",
+                                    'F1 Score': f"{metrics['f1_score']:.3f}",
+                                    'Support': metrics['support']
+                                }
+                                for cat, metrics in sorted(multiclass_metrics['by_category'].items())
+                            ])
+                            
+                            st.dataframe(category_metrics_df, hide_index=True, use_container_width=True)
+                            
+                            # Confusion matrix
+                            st.markdown('**Confusion Matrix**')
+                            st.caption('Rows: Human labels | Columns: Automated predictions')
+                            conf_mat = confusion_matrix(y_true, y_pred)
+                            st.dataframe(conf_mat, use_container_width=True)
+                            
+                            st.info('💾 Evaluation computed from uploaded file. Download results below if needed.')
+                            st.download_button(
+                                'Download validated review with metrics',
+                                reviewed.to_csv(index=False),
+                                'validated_review_with_metrics.csv',
+                                mime='text/csv'
+                            )
+                    
+                    except Exception as e:
+                        st.error(f'Error processing uploaded review: {e}')
+                        import traceback
+                        with st.expander('Error details'):
+                            st.code(traceback.format_exc())
+            else:
+                # Show evaluation results
+                st.success(f'✓ {review_sample["human_category"].notna().sum()} grants have been validated')
+                
+                # Run evaluation
+                from evaluate_classification_v1 import compute_binary_metrics, compute_multiclass_metrics, confusion_matrix
+                
+                validated = review_sample[review_sample['human_category'].notna() & (review_sample['human_category'] != '')]
+                y_true = validated['human_category']
+                y_pred = validated['automated_category']
+                
+                st.subheader('Evaluation Results')
+                
+                # Binary metrics
+                st.markdown('**Binary Classification (MH Relevant vs Not)**')
+                binary_metrics = compute_binary_metrics(y_true, y_pred)
+                
+                if 'error' not in binary_metrics:
+                    col1, col2, col3, col4 = st.columns(4)
+                    with col1:
+                        st.metric('Precision', f"{binary_metrics['precision']:.3f}")
+                    with col2:
+                        st.metric('Recall', f"{binary_metrics['recall']:.3f}")
+                    with col3:
+                        st.metric('F1 Score', f"{binary_metrics['f1_score']:.3f}")
+                    with col4:
+                        st.metric('Accuracy', f"{binary_metrics['accuracy']:.3f}")
+                
+                # Multi-class metrics
+                st.markdown('**Multi-Class Performance**')
+                multiclass_metrics = compute_multiclass_metrics(y_true, y_pred)
+                st.metric('Overall Accuracy', f"{multiclass_metrics['overall_accuracy']:.3f}")
+                
+                # Per-category metrics
+                category_metrics_df = pd.DataFrame([
+                    {
+                        'Category': cat,
+                        'Precision': metrics['precision'],
+                        'Recall': metrics['recall'],
+                        'F1 Score': metrics['f1_score'],
+                        'Support': metrics['support']
+                    }
+                    for cat, metrics in sorted(multiclass_metrics['by_category'].items())
+                ])
+                
+                st.dataframe(category_metrics_df, hide_index=True, use_container_width=True)
+                
+                # Confusion matrix
+                st.markdown('**Confusion Matrix**')
+                st.caption('Rows: Human labels | Columns: Automated predictions')
+                conf_mat = confusion_matrix(y_true, y_pred)
+                st.dataframe(conf_mat, use_container_width=True)
+        
+        # Safeguards
+        st.subheader('⚠️ Important Limitations')
+        st.error('''
+        **DO NOT use automated classifications for:**
+        - Calculating verified mental health funding totals
+        - Making policy claims about mental health investment
+        - Equating neuroscience/behavioral science with mental health funding
+        - Assuming full grant value is mental health for integrated grants
+        
+        **Human validation is required** for all financial estimates and policy recommendations.
+        ''')
+        
+        st.info('''
+        **Classification methodology:** See MENTAL_HEALTH_CLASSIFICATION_V1.md for complete documentation including:
+        - Category definitions and inclusion/exclusion criteria
+        - Rule-based classification logic
+        - Confidence scoring approach
+        - Human validation protocol
+        - Evaluation metrics definitions
+        ''')
 
 elif page == 'Classification Validation':
     st.header('Human validation of mental health screening')
